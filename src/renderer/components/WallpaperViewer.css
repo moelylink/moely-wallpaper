@@ -1,0 +1,1158 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary-color: rgb(255, 0, 180);
+  --primary-hover: rgb(255, 51, 195);
+  --primary-light: rgba(255, 0, 180, 0.1);
+  --primary-medium: rgba(255, 0, 180, 0.3);
+  --dark-bg: #0a0a0a;
+  --light-bg: #1a1a1a;
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body, html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: 'Poppins', sans-serif;
+  overflow: hidden;
+  background: transparent;
+}
+
+.App {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: var(--dark-bg);
+  position: relative;
+}
+
+/* Animated background gradient */
+.App::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at 20% 80%, var(--primary-light) 0%, transparent 50%),
+              radial-gradient(circle at 80% 20%, rgba(255, 0, 180, 0.05) 0%, transparent 50%),
+              radial-gradient(circle at 40% 40%, rgba(255, 51, 195, 0.05) 0%, transparent 50%);
+  animation: gradientShift 20s ease-in-out infinite;
+  z-index: 0;
+}
+
+@keyframes gradientShift {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(-5%, 5%) rotate(120deg); }
+  66% { transform: translate(5%, -5%) rotate(240deg); }
+}
+
+.wallpaper-viewer {
+  position: relative;
+  width: 90vw;
+  max-width: 1200px;
+  height: 85vh;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5),
+              0 0 100px rgba(255, 0, 180, 0.2),
+              inset 0 0 100px rgba(255, 0, 180, 0.03);
+  z-index: 1;
+  animation: fadeInScale 0.6s ease-out;
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.wallpaper-container {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  position: relative;
+}
+
+/* 3D carousel container */
+.carousel-3d-container {
+  position: relative;
+  width: 100%;
+  height: 80%;
+  perspective: 1000px;
+  perspective-origin: center center;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 硬件加速和性能优化 */
+  will-change: transform;
+  contain: layout style paint;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Navigation buttons */
+.nav-button {
+  position: absolute;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+  opacity: 0.8;
+}
+
+.nav-button:hover {
+  background: var(--primary-color);
+  color: var(--text-primary);
+  transform: scale(1.1);
+  opacity: 1;
+  box-shadow: 0 0 30px rgba(255, 0, 180, 0.6),
+              0 0 60px rgba(255, 0, 180, 0.3);
+}
+
+.nav-button:active {
+  transform: scale(0.95);
+}
+
+.nav-button svg {
+  width: 24px;
+  height: 24px;
+  transition: transform 0.3s ease;
+}
+
+.nav-button:hover svg {
+  transform: scale(1.2);
+}
+
+.nav-button-left {
+  left: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.nav-button-left:hover {
+  transform: translateY(-50%) scale(1.1);
+}
+
+.nav-button-right {
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.nav-button-right:hover {
+  transform: translateY(-50%) scale(1.1);
+}
+
+/* 禁用状态样式 */
+.nav-button.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(100%);
+}
+
+.nav-button.disabled:hover {
+  transform: translateY(-50%) scale(1);
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+.indicator.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.indicator.disabled:hover {
+  transform: scale(1);
+}
+
+/* 横向滚动轮播容器 */
+.horizontal-carousel {
+  width: 100%;
+  height: 80%;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.carousel-track {
+  display: flex;
+  height: 100%;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.carousel-slide {
+  min-width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.carousel-slide img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 15px;
+  transition: all 0.3s ease;
+  display: block;
+  margin: 0 auto;
+  /* 确保图片清晰度 */
+  image-rendering: auto;
+  -webkit-image-rendering: auto;
+  -moz-image-rendering: auto;
+  image-rendering: high-quality;
+}
+
+/* 平滑滑动过渡效果 */
+.carousel-item.slide-out-left {
+  animation: smoothSlideOutLeft 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.carousel-item.slide-out-right {
+  animation: smoothSlideOutRight 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.carousel-item.slide-in-left {
+  animation: smoothSlideInLeft 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.carousel-item.slide-in-right {
+  animation: smoothSlideInRight 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.carousel-item.fade-out {
+  animation: smoothFadeOut 0.4s ease-out forwards;
+}
+
+.carousel-item.fade-in {
+  animation: smoothFadeIn 0.6s ease-out forwards;
+}
+
+/* 原有动画效果保持不变 */
+.carousel-item.slide-to-center-from-left {
+  animation: slideToCenter 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.carousel-item.slide-to-center-from-right {
+  animation: slideToCenter 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.carousel-item.slide-to-left-from-center {
+  animation: slideToLeft 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.carousel-item.slide-to-left-from-right {
+  animation: slideFromRightToLeft 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.carousel-item.slide-to-right-from-center {
+  animation: slideToRight 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.carousel-item.slide-to-right-from-left {
+  animation: slideFromLeftToRight 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* 新增：快速优化动画效果 - 缩短路径和时间 */
+.carousel-item.fast-slide-to-center-from-left {
+  animation: fastSlideToCenter 0.28s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+.carousel-item.fast-slide-to-center-from-right {
+  animation: fastSlideToCenter 0.28s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+.carousel-item.fast-slide-to-left-from-center {
+  animation: fastSlideToLeft 0.28s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+.carousel-item.fast-slide-to-left-from-right {
+  animation: fastSlideFromRightToLeft 0.28s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+.carousel-item.fast-slide-to-right-from-center {
+  animation: fastSlideToRight 0.28s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+.carousel-item.fast-slide-to-right-from-left {
+  animation: fastSlideFromLeftToRight 0.28s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+/* 快速淡入淡出效果 */
+.carousel-item.fast-fade-out {
+  animation: fastFadeOut 0.1s ease-out forwards;
+}
+
+.carousel-item.fast-fade-in {
+  animation: fastFadeIn 0.1s ease-in forwards;
+}
+
+/* 左滑出动画 */
+@keyframes smoothSlideOutLeft {
+  0% {
+    transform: translateX(-50%) scale(1) translateZ(100px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-200%) scale(0.8) translateZ(0px);
+    opacity: 0;
+  }
+}
+
+/* 右滑出动画 */
+@keyframes smoothSlideOutRight {
+  0% {
+    transform: translateX(-50%) scale(1) translateZ(100px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%) scale(0.8) translateZ(0px);
+    opacity: 0;
+  }
+}
+
+/* 左滑入动画 */
+@keyframes smoothSlideInLeft {
+  0% {
+    transform: translateX(100%) scale(0.8) translateZ(0px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(-50%) scale(1) translateZ(100px);
+    opacity: 1;
+  }
+}
+
+/* 右滑入动画 */
+@keyframes smoothSlideInRight {
+  0% {
+    transform: translateX(-200%) scale(0.8) translateZ(0px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(-50%) scale(1) translateZ(100px);
+    opacity: 1;
+  }
+}
+
+/* 淡出动画 */
+@keyframes smoothFadeOut {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1) translateZ(100px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.8) translateZ(50px);
+  }
+}
+
+/* 淡入动画 */
+@keyframes smoothFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.8) translateZ(50px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1) translateZ(100px);
+  }
+}
+
+/* 增强的当前图片动画 */
+.carousel-current.new-image {
+  animation: newImageEntrance 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@keyframes newImageEntrance {
+  0% {
+    transform: translateX(-50%) rotateY(180deg) scale(0.3) translateZ(-200px);
+    opacity: 0;
+    filter: blur(5px);
+  }
+  50% {
+    transform: translateX(-50%) rotateY(90deg) scale(0.7) translateZ(50px);
+    opacity: 0.5;
+    filter: blur(2px);
+  }
+  100% {
+    transform: translateX(-50%) rotateY(0deg) scale(1) translateZ(100px);
+    opacity: 1;
+    filter: blur(0px);
+  }
+}
+
+/* 三张图片同时移动的关键帧动画 */
+/* 从左边移动到中间位置 - 优化版本 */
+@keyframes slideToCenter {
+  0% {
+    transform: translateX(-50%) translateX(-40vw) scale(0.8);
+    opacity: 0.7;
+    filter: brightness(0.7);
+  }
+  100% {
+    transform: translateX(-50%) translateX(0) scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+
+/* 从中间移动到左边位置 - 优化版本 */
+@keyframes slideToLeft {
+  0% {
+    transform: translateX(-50%) translateX(0) scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+  100% {
+    transform: translateX(-50%) translateX(-40vw) scale(0.8);
+    opacity: 0.7;
+    filter: brightness(0.7);
+  }
+}
+
+/* 从中间移动到右边位置 - 优化版本 */
+@keyframes slideToRight {
+  0% {
+    transform: translateX(-50%) translateX(0) scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+  100% {
+    transform: translateX(-50%) translateX(40vw) scale(0.8);
+    opacity: 0.7;
+    filter: brightness(0.7);
+  }
+}
+
+/* 从右边移动到左边位置 - 优化版本 */
+@keyframes slideFromRightToLeft {
+  0% {
+    transform: translateX(-50%) translateX(40vw) scale(0.8);
+    opacity: 0.7;
+    filter: brightness(0.7);
+  }
+  100% {
+    transform: translateX(-50%) translateX(-40vw) scale(0.8);
+    opacity: 0.7;
+    filter: brightness(0.7);
+  }
+}
+
+/* 从左边移动到右边位置 - 优化版本 */
+@keyframes slideFromLeftToRight {
+  0% {
+    transform: translateX(-50%) translateX(-40vw) scale(0.8);
+    opacity: 0.7;
+    filter: brightness(0.7);
+  }
+  100% {
+    transform: translateX(-50%) translateX(40vw) scale(0.8);
+    opacity: 0.7;
+    filter: brightness(0.7);
+  }
+}
+
+/* 新增：快速动画关键帧 - 缩短移动距离，提升流畅度 */
+@keyframes fastSlideToCenter {
+  0% {
+    transform: translateX(-50%) translateX(-30vw) scale(0.85);
+    opacity: 0.8;
+    filter: brightness(0.8);
+  }
+  100% {
+    transform: translateX(-50%) translateX(0) scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+
+@keyframes fastSlideToLeft {
+  0% {
+    transform: translateX(-50%) translateX(0) scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+  100% {
+    transform: translateX(-50%) translateX(-30vw) scale(0.85);
+    opacity: 0.8;
+    filter: brightness(0.8);
+  }
+}
+
+@keyframes fastSlideToRight {
+  0% {
+    transform: translateX(-50%) translateX(0) scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+  100% {
+    transform: translateX(-50%) translateX(30vw) scale(0.85);
+    opacity: 0.8;
+    filter: brightness(0.8);
+  }
+}
+
+@keyframes fastSlideFromRightToLeft {
+  0% {
+    transform: translateX(-50%) translateX(30vw) scale(0.85);
+    opacity: 0.8;
+    filter: brightness(0.8);
+  }
+  100% {
+    transform: translateX(-50%) translateX(-30vw) scale(0.85);
+    opacity: 0.8;
+    filter: brightness(0.8);
+  }
+}
+
+@keyframes fastSlideFromLeftToRight {
+  0% {
+    transform: translateX(-50%) translateX(-30vw) scale(0.85);
+    opacity: 0.8;
+    filter: brightness(0.8);
+  }
+  100% {
+    transform: translateX(-50%) translateX(30vw) scale(0.85);
+    opacity: 0.8;
+    filter: brightness(0.8);
+  }
+}
+
+/* 快速淡入淡出关键帧 */
+@keyframes fastFadeOut {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.95);
+  }
+}
+
+@keyframes fastFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+.carousel-item {
+  width: 600px;
+  height: 400px;
+  overflow: hidden;
+  border-radius: 15px;
+  position: absolute;
+  transition: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 硬件加速优化 */
+  will-change: transform, opacity, filter;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  /* 新增：强制硬件加速 */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  /* 优化渲染性能 */
+  contain: layout style paint;
+}
+
+.carousel-prev {
+  transform: translateX(-50%) scale(0.8);
+  left: 10%;
+  opacity: 0.7;
+  filter: brightness(0.7);
+  z-index: 1;
+}
+
+.carousel-current {
+  transform: translateX(-50%) scale(1);
+  left: 50%;
+  z-index: 2;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.carousel-next {
+  transform: translateX(-50%) scale(0.8);
+  left: 90%;
+  opacity: 0.7;
+  filter: brightness(0.7);
+  z-index: 1;
+}
+
+.carousel-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+  border-radius: 15px;
+  transition: none;
+  display: block;
+  margin: 0 auto;
+  /* 确保图片清晰度和性能 */
+  image-rendering: auto;
+  -webkit-image-rendering: auto;
+  -moz-image-rendering: auto;
+  image-rendering: high-quality;
+  /* 硬件加速优化 */
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  /* 减少重绘 */
+  pointer-events: none;
+}
+
+.carousel-image {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.carousel-prev:hover {
+  opacity: 0.9;
+  filter: brightness(0.9);
+  transform: translateX(-50%) scale(0.85);
+}
+
+.carousel-next:hover {
+  opacity: 0.9;
+  filter: brightness(0.9);
+  transform: translateX(-50%) scale(0.85);
+}
+
+.carousel-current img {
+  max-width: 100%;
+  animation: currentImageAnimation 0.5s ease-out;
+}
+
+@keyframes currentImageAnimation {
+  from {
+    transform: scale(0.9) rotateY(90deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotateY(0deg);
+    opacity: 1;
+  }
+}
+
+/* Override existing styles */
+.wallpaper-image-wrapper {
+  display: none;
+}
+
+.preview-images {
+  display: none;
+}
+
+@keyframes imageSlide {
+  from {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Loading indicator */
+.loading-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1rem;
+  color: var(--primary-color);
+  font-weight: 500;
+  animation: pulse 1.5s ease-in-out infinite;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading-indicator .spinner {
+  border: 3px solid rgba(255, 0, 180, 0.3);
+  border-top: 3px solid var(--primary-color);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.image-error-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 68, 68, 0.1);
+  border: 2px dashed rgba(255, 68, 68, 0.5);
+  border-radius: 15px;
+  color: #ff4444;
+  font-size: 0.9rem;
+  font-weight: 500;
+  gap: 8px;
+  min-height: 200px;
+}
+
+.image-error-placeholder .error-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.image-error-placeholder .error-text {
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* Wallpaper info */
+.wallpaper-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  text-align: left;
+  color: var(--text-primary);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  opacity: 1;
+}
+
+.wallpaper-info .info-item {
+  margin-bottom: 5px;
+}
+
+.info-item {
+  margin-bottom: 8px;
+}
+
+/* 已移除信息栏动画效果 */
+
+.info-label {
+  font-weight: 600;
+  color: var(--primary-color);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+  margin-right: 10px;
+}
+
+.info-value {
+  color: var(--text-secondary);
+  font-weight: 400;
+  font-size: 0.9rem;
+}
+
+/* Indicator container */
+.indicator-container {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: 30px;
+  z-index: 10;
+}
+
+.indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: var(--text-secondary);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.indicator::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: var(--primary-color);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.3s ease;
+}
+
+.indicator:hover {
+  transform: scale(1.3);
+}
+
+.indicator:hover::before {
+  width: 100%;
+  height: 100%;
+}
+
+.indicator.active {
+  background-color: var(--primary-color);
+  box-shadow: 0 0 15px rgba(255, 0, 180, 0.8),
+              0 0 30px rgba(255, 0, 180, 0.4);
+  animation: indicatorPulse 2s ease-in-out infinite;
+}
+
+@keyframes indicatorPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+/* No wallpapers message */
+.no-wallpapers {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+/* Cache refresh button */
+.cache-refresh-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.7);
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  z-index: 1000;
+  transition: background-color 0.3s ease, transform 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cache-refresh-button:hover {
+  background-color: rgba(0, 0, 0, 0.9);
+  transform: scale(1.1);
+}
+
+.cache-refresh-button:active {
+  transform: scale(0.9);
+}
+
+/* 在萌哩上查看按钮容器 - 右下角 */
+.moely-link-container {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 15;
+}
+
+/* 在萌哩上查看按钮 */
+.moely-link-button {
+  width: 140px;
+  height: 40px;
+  border-radius: 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.8;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.moely-link-button:hover {
+  background: var(--primary-color);
+  color: var(--text-primary);
+  transform: scale(1.05);
+  opacity: 1;
+  box-shadow: 0 0 20px rgba(255, 0, 180, 0.4),
+              0 0 40px rgba(255, 0, 180, 0.2);
+}
+
+.moely-link-button:active {
+  transform: scale(0.95);
+}
+
+.moely-link-button svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+}
+
+.moely-link-button:hover svg {
+  transform: scale(1.1);
+}
+
+/* 控制按钮组 */
+.control-buttons {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 15;
+}
+
+/* 设为壁纸按钮 */
+.set-wallpaper-button {
+  width: 140px;
+  height: 40px;
+  border-radius: 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.8;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.set-wallpaper-button:hover {
+  background: var(--primary-color);
+  color: var(--text-primary);
+  transform: scale(1.05);
+  opacity: 1;
+  box-shadow: 0 0 20px rgba(255, 0, 180, 0.4),
+              0 0 40px rgba(255, 0, 180, 0.2);
+}
+
+.set-wallpaper-button:active {
+  transform: scale(0.95);
+}
+
+.set-wallpaper-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.set-wallpaper-button:disabled:hover {
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+/* 自动设置壁纸按钮 */
+.auto-wallpaper-button {
+  width: 140px;
+  height: 40px;
+  border-radius: 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.8;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.auto-wallpaper-button:hover {
+  transform: scale(1.05);
+  opacity: 1;
+  box-shadow: 0 0 15px rgba(128, 128, 128, 0.3);
+}
+
+.auto-wallpaper-button:active {
+  transform: scale(0.95);
+}
+
+/* 自动壁纸按钮激活状态 */
+.auto-wallpaper-button.active {
+  background: linear-gradient(135deg, #00ff88, #00cc66);
+  color: #fff;
+  border-color: #00ff88;
+  animation: autoWallpaperPulse 2s ease-in-out infinite;
+}
+
+.auto-wallpaper-button.active:hover {
+  background: linear-gradient(135deg, #00ff88, #00aa55);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.4),
+              0 0 40px rgba(0, 255, 136, 0.2);
+}
+
+@keyframes autoWallpaperPulse {
+  0%, 100% { 
+    box-shadow: 0 0 10px rgba(0, 255, 136, 0.3); 
+  }
+  50% { 
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.6),
+                0 0 40px rgba(0, 255, 136, 0.3);
+  }
+}
+
+/* 管理缓存按钮 */
+.cache-manage-button {
+  width: 140px;
+  height: 40px;
+  border-radius: 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.8;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.cache-manage-button:hover {
+  background: #ff9500;
+  color: var(--text-primary);
+  transform: scale(1.05);
+  opacity: 1;
+  box-shadow: 0 0 20px rgba(255, 149, 0, 0.4),
+              0 0 40px rgba(255, 149, 0, 0.2);
+}
+
+.cache-manage-button:active {
+  transform: scale(0.95);
+}
+
+/* 按钮加载状态 */
+.button-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 6px;
+}
+
+/* 状态项样式 */
+.status-item {
+  animation: statusFadeIn 0.3s ease-out;
+}
+
+.status-text {
+  color: var(--primary-color);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+@keyframes statusFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

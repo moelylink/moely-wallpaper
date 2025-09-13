@@ -1,0 +1,444 @@
+/* App.css styles are now in WallpaperViewer.css for better organization */
+
+.loading, .error {
+  color: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  animation: fadeIn 0.5s ease-out;
+  flex-direction: column;
+  /* 性能优化 */
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+.loading-spinner {
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top: 4px solid #ffffff;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  animation: spin 1s linear infinite;
+  /* 硬件加速优化 */
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.loading-container, .error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  /* 性能优化 */
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-icon {
+  font-size: 2rem;
+  color: #ff4444;
+}
+
+.retry-button {
+  background-color: #ff4444;
+  color: #ffffff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.retry-button:hover {
+  background-color: #ff2222;
+}
+
+.retry-button:active {
+  background-color: #cc0000;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.loading {
+  color: rgb(255, 0, 180);
+}
+
+.loading::after {
+  content: '...';
+  animation: loadingDots 1.5s infinite;
+}
+
+@keyframes loadingDots {
+  0%, 20% { content: '.'; }
+  40% { content: '..'; }
+  60%, 100% { content: '...'; }
+}
+
+.error {
+  color: #ff4444;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.error::before {
+  content: '⚠';
+  font-size: 2rem;
+  margin-bottom: 10px;
+}
+
+/* 缓存进度指示器 */
+.cache-progress {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 0, 180, 0.3);
+  border-radius: 15px;
+  padding: 30px;
+  min-width: 300px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5),
+              0 0 80px rgba(255, 0, 180, 0.3);
+  animation: fadeInScale 0.3s ease-out;
+}
+
+.cache-progress-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+}
+
+.cache-progress-text {
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 500;
+  text-align: center;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cache-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.cache-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, rgb(255, 0, 180), rgb(255, 51, 195));
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.cache-progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.4) 50%, 
+    transparent 100%);
+  animation: progressShine 2s infinite;
+}
+
+@keyframes progressShine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Loading text styles */
+.loading-text {
+  color: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.loading-subtitle {
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 400;
+  text-align: center;
+  opacity: 0.8;
+}
+
+/* 缓存管理按钮 */
+.cache-manager-toggle {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 0, 180, 0.3);
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.cache-manager-toggle:hover {
+  background: rgba(255, 0, 180, 0.1);
+  border-color: rgba(255, 0, 180, 0.5);
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(255, 0, 180, 0.2);
+}
+
+.cache-icon {
+  font-size: 20px;
+  filter: grayscale(0.2);
+}
+
+/* 缓存管理面板覆盖层 */
+.cache-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* 缓存管理面板 */
+.cache-panel {
+  background: rgba(20, 20, 30, 0.95);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 0, 180, 0.3);
+  border-radius: 20px;
+  padding: 0;
+  max-width: 450px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
+              0 0 100px rgba(255, 0, 180, 0.2);
+  animation: slideInScale 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: hidden;
+}
+
+/* 缓存面板头部 */
+.cache-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 25px;
+  border-bottom: 1px solid rgba(255, 0, 180, 0.2);
+  background: rgba(255, 0, 180, 0.05);
+}
+
+.cache-panel-header h3 {
+  color: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 24px;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.close-button:hover {
+  background: rgba(255, 0, 180, 0.2);
+  transform: scale(1.1);
+}
+
+/* 缓存面板内容 */
+.cache-panel-content {
+  padding: 25px;
+}
+
+/* 缓存统计 */
+.cache-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px;
+  background: rgba(255, 0, 180, 0.05);
+  border: 1px solid rgba(255, 0, 180, 0.1);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.stat-item:hover {
+  background: rgba(255, 0, 180, 0.08);
+  border-color: rgba(255, 0, 180, 0.2);
+}
+
+.stat-label {
+  color: #ffffff;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.stat-value {
+  color: rgb(255, 0, 180);
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+}
+
+/* 缓存操作按钮 */
+.cache-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.clear-cache-button, .refresh-stats-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Poppins', sans-serif;
+}
+
+.clear-cache-button {
+  background: linear-gradient(135deg, #ff4444, #ff6666);
+  color: #ffffff;
+  box-shadow: 0 4px 15px rgba(255, 68, 68, 0.3);
+}
+
+.clear-cache-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff2222, #ff4444);
+  box-shadow: 0 6px 20px rgba(255, 68, 68, 0.4);
+  transform: translateY(-2px);
+}
+
+.clear-cache-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.refresh-stats-button {
+  background: rgba(255, 0, 180, 0.1);
+  color: rgb(255, 0, 180);
+  border: 1px solid rgba(255, 0, 180, 0.3);
+}
+
+.refresh-stats-button:hover {
+  background: rgba(255, 0, 180, 0.2);
+  border-color: rgba(255, 0, 180, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 0, 180, 0.2);
+}
+
+/* 小型加载动画 */
+.loading-spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid #ffffff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* 帮助提示 */
+.cache-help {
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 10px;
+  padding: 15px;
+}
+
+.cache-help p {
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* 动画 */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideInScale {
+  from {
+    opacity: 0;
+    transform: translateY(-50px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
