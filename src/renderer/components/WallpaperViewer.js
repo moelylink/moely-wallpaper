@@ -3,7 +3,7 @@ import './WallpaperViewer.css';
 
 const { ipcRenderer } = window.require('electron');
 
-const WallpaperViewer = ({ wallpapers }) => {
+const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart, handleAutoStartChange }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [displayWallpapers, setDisplayWallpapers] = useState([]);
   const [imageCache, setImageCache] = useState({});
@@ -11,7 +11,7 @@ const WallpaperViewer = ({ wallpapers }) => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [animationClass, setAnimationClass] = useState('');
   const [isNewImage, setIsNewImage] = useState(false);
-  const [slideDirection, setSlideDirection] = useState(''); // 'left' or 'right'
+  const [slideDirection, setSlideDirection] = useState('');
   const [animatingItems, setAnimatingItems] = useState({});
   const [isSettingWallpaper, setIsSettingWallpaper] = useState(false);
   const [wallpaperStatus, setWallpaperStatus] = useState('');
@@ -618,6 +618,18 @@ style={{
 
       {/* 控制按钮组 */}
       <div className="control-buttons">
+        {/* 设置按钮 */}
+        <button 
+          className="settings-button"
+          onClick={() => setShowSettings(true)}
+          title="设置"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{marginRight: '6px'}}>
+            <path d="M12 15.5A3.5 3.5 0 0 1 8.5 12A3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5a3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97c0-.33-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.39-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1c0 .33.03.65.07.97l-2.11 1.66c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.06.74 1.69.99l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.26 1.17-.59 1.69-.99l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.66Z" fill="currentColor"/>
+          </svg>
+          设置
+        </button>
+        
         {/* 设为壁纸按钮 */}
         <button 
           className="set-wallpaper-button"
@@ -674,6 +686,42 @@ style={{
           在萌哩打开
         </button>
       </div>
+
+      {/* 设置面板 */}
+      {showSettings && (
+        <div className="settings-panel-overlay" onClick={() => setShowSettings(false)}>
+          <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="settings-panel-header">
+              <h3>设置</h3>
+              <button 
+                className="close-button"
+                onClick={() => setShowSettings(false)}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="settings-panel-content">
+              <div className="setting-item">
+                <div className="setting-label">
+                  <span className="setting-title">开机自启动</span>
+                  <span className="setting-description">开机时自动启动萌哩壁纸</span>
+                </div>
+                <div className="setting-control">
+                  <label className="switch">
+                    <input 
+                      type="checkbox" 
+                      checked={autoStart}
+                      onChange={(e) => handleAutoStartChange(e.target.checked)}
+                    />
+                    <span className="slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -11,11 +11,8 @@ function App() {
   const [wallpapers, setWallpapers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [cacheProgress, setCacheProgress] = useState({ completed: 0, total: 0 });
-  const [isCaching, setIsCaching] = useState(false);
-  const [showCachePanel, setShowCachePanel] = useState(false);
-  const [cacheStats, setCacheStats] = useState({ totalImages: 0, cacheSize: 0 });
-  const [isClearingCache, setIsClearingCache] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [autoStart, setAutoStart] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   // 检查是否首次使用
@@ -92,50 +89,20 @@ function App() {
     }
   };
 
-  // 获取缓存统计信息
-  const loadCacheStats = async () => {
+  // 切换设置面板
+  const toggleSettings = () => {
+    setShowSettings(!showSettings);
+  };
+
+  // 处理开机自启动开关
+  const handleAutoStartChange = async (enabled) => {
     try {
-      const stats = await ipcRenderer.invoke('get-cache-stats');
-      setCacheStats(stats);
+      setAutoStart(enabled);
+      await ipcRenderer.invoke('set-auto-start', enabled);
     } catch (error) {
-      console.error('Failed to load cache stats:', error);
+      console.error('Failed to set auto start:', error);
+      alert('设置开机自启动失败：' + error.message);
     }
-  };
-
-  // 清理缓存
-  const handleClearCache = async () => {
-    try {
-      setIsClearingCache(true);
-      await ipcRenderer.invoke('clear-cache');
-      
-      // 刷新缓存统计
-      await loadCacheStats();
-      
-      // 重新加载壁纸数据，强制重新下载
-      window.location.reload();
-    } catch (error) {
-      console.error('Failed to clear cache:', error);
-      alert('清理缓存失败：' + error.message);
-    } finally {
-      setIsClearingCache(false);
-    }
-  };
-
-  // 打开/关闭缓存面板
-  const toggleCachePanel = async () => {
-    if (!showCachePanel) {
-      await loadCacheStats();
-    }
-    setShowCachePanel(!showCachePanel);
-  };
-
-  // 格式化文件大小
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   // 新手引导完成处理
@@ -149,17 +116,17 @@ function App() {
     setShowOnboarding(true);
   };
 
-  // 监听缓存进度
+  // 加载设置
   useEffect(() => {
-    const handleCacheProgress = (event, progress) => {
-      setCacheProgress(progress);
+    const loadSettings = async () => {
+      try {
+        const settings = await ipcRenderer.invoke('get-settings');
+        setAutoStart(settings.autoStart !== false); // 默认开启
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+      }
     };
-
-    ipcRenderer.on('cache-progress', handleCacheProgress);
-
-    return () => {
-      ipcRenderer.removeListener('cache-progress', handleCacheProgress);
-    };
+    loadSettings();
   }, []);
 
   // 监听键盘事件，支持快捷键重新显示引导
@@ -219,78 +186,49 @@ function App() {
       <TitleBar />
       <div className="App">
         <ParticleBackground />
-        <WallpaperViewer wallpapers={wallpapers} />
+        <WallpaperViewer 
+          wallpapers={wallpapers} 
+          showSettings={showSettings}
+          setShowSettings={setShowSettings}
+          autoStart={autoStart}
+          handleAutoStartChange={handleAutoStartChange}
+        />
 
         {/* 新手引导组件 */}
         {showOnboarding && (
           <OnboardingTour onComplete={handleOnboardingComplete} />
         )}
         
-        {/* 缓存管理按钮 */}
-        <button 
-          className="cache-manager-toggle"
-          onClick={toggleCachePanel}
-          title="缓存管理"
-        >
-          <span className="cache-icon">💾</span>
-        </button>
-        
-        {/* 缓存管理面板 */}
-        {showCachePanel && (
-          <div className="cache-panel-overlay" onClick={() => setShowCachePanel(false)}>
-            <div className="cache-panel" onClick={(e) => e.stopPropagation()}>
-              <div className="cache-panel-header">
-                <h3>缓存管理</h3>
+        {/* 设置面板 */}
+        {showSettings && (
+          <div className="settings-panel-overlay" onClick={() => setShowSettings(false)}>
+            <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="settings-panel-header">
+                <h3>设置</h3>
                 <button 
                   className="close-button"
-                  onClick={() => setShowCachePanel(false)}
+                  onClick={() => setShowSettings(false)}
                 >
                   ×
                 </button>
               </div>
               
-              <div className="cache-panel-content">
-                <div className="cache-stats">
-                  <div className="stat-item">
-                    <span className="stat-label">缓存数量：</span>
-                    <span className="stat-value">{cacheStats.totalImages} 张</span>
+              <div className="settings-panel-content">
+                <div className="setting-item">
+                  <div className="setting-label">
+                    <span className="setting-title">开机自启动</span>
+                    <span className="setting-description">开机时自动启动萌哩壁纸</span>
                   </div>
-                  <div className="stat-item">
-                    <span className="stat-label">缓存大小：</span>
-                    <span className="stat-value">{formatFileSize(cacheStats.cacheSize)}</span>
+                  <div className="setting-control">
+                    <label className="switch">
+                      <input 
+                        type="checkbox" 
+                        checked={autoStart}
+                        onChange={(e) => handleAutoStartChange(e.target.checked)}
+                      />
+                      <span className="slider"></span>
+                    </label>
                   </div>
-                </div>
-                
-                <div className="cache-actions">
-                  <button 
-                    className="clear-cache-button"
-                    onClick={handleClearCache}
-                    disabled={isClearingCache}
-                  >
-                    {isClearingCache ? (
-                      <>
-                        <span className="loading-spinner-small"></span>
-                        清理中...
-                      </>
-                    ) : (
-                      <>
-                        <span className="clear-icon">🧹</span>
-                        一键清理缓存
-                      </>
-                    )}
-                  </button>
-                  
-                  <button 
-                    className="refresh-stats-button"
-                    onClick={loadCacheStats}
-                  >
-                    <span className="refresh-icon">🔄</span>
-                    刷新统计
-                  </button>
-                </div>
-                
-                <div className="cache-help">
-                  <p>💡 清理缓存将删除所有本地图片文件，下次查看时需要重新下载。</p>
                 </div>
               </div>
             </div>

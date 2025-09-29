@@ -4,10 +4,21 @@ import fs from 'fs';
 import axios from 'axios';
 import { setWallpaper } from 'wallpaper';
 import ImageCache from './imageCache.js';
+import AutoLaunch from 'auto-launch';
 
 let mainWindow;
 let imageCache;
+let autoLauncher;
 const API_URL = 'https://gh-proxy.com/https://raw.githubusercontent.com/moelylink/wallpaper-api/refs/heads/main/wallpaper.json';
+
+// 初始化开机自启动
+const initAutoLaunch = () => {
+  autoLauncher = new AutoLaunch({
+    name: '萌哩壁纸',
+    path: process.execPath,
+    isHidden: true
+  });
+};
 
 // Configure axios with timeout and retry defaults
 const axiosConfig = {
@@ -72,6 +83,8 @@ function createWindow() {
 app.on('ready', () => {
   // 初始化图片缓存
   imageCache = new ImageCache();
+  // 初始化开机自启动
+  initAutoLaunch();
   createWindow();
 });
 
@@ -148,30 +161,6 @@ ipcMain.handle('cache-images', async (event, wallpapers) => {
   }
 });
 
-ipcMain.handle('get-cache-stats', async (event) => {
-  try {
-    return imageCache.getCacheStats();
-  } catch (error) {
-    console.error('Error getting cache stats:', error);
-    // 返回默认统计信息而不是抛出错误
-    return {
-      totalImages: 0,
-      cacheSize: 0,
-      oldestImage: null,
-      newestImage: null
-    };
-  }
-});
-
-ipcMain.handle('clear-cache', async (event) => {
-  try {
-    imageCache.clearCache();
-    return { success: true };
-  } catch (error) {
-    console.error('Error clearing cache:', error);
-    throw error;
-  }
-});
 
 // Window control handlers
 ipcMain.on('window-minimize', () => {
@@ -198,6 +187,36 @@ ipcMain.handle('open-external', async (event, url) => {
   } catch (error) {
     console.error('Error opening external URL:', error);
     return { success: false, error: error.message };
+  }
+});
+
+// 设置相关处理程序
+ipcMain.handle('get-settings', async (event) => {
+  try {
+    // 检查开机自启动状态
+    const isEnabled = await autoLauncher.isEnabled();
+    return {
+      autoStart: isEnabled
+    };
+  } catch (error) {
+    console.error('Error getting settings:', error);
+    return {
+      autoStart: true // 默认开启
+    };
+  }
+});
+
+ipcMain.handle('set-auto-start', async (event, enabled) => {
+  try {
+    if (enabled) {
+      await autoLauncher.enable();
+    } else {
+      await autoLauncher.disable();
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error setting auto start:', error);
+    throw error;
   }
 });
 
