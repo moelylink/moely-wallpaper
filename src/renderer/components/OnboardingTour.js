@@ -18,7 +18,14 @@ const OnboardingTour = ({ onComplete }) => {
       title: '切换壁纸 ⬅️➡️',
       content: '使用左右箭头键、鼠标滚轮或点击两侧图片来浏览壁纸',
       highlight: '.carousel-3d-container',
-      position: 'bottom'
+      position: 'center'
+    },
+    {
+      id: 'set-wallpaper',
+      title: '设为壁纸 🖼️',
+      content: '点击此按钮将当前图片设为桌面壁纸',
+      highlight: '.set-wallpaper-button',
+      position: 'left'
     },
     {
       id: 'wallpaper-info',
@@ -39,19 +46,19 @@ const OnboardingTour = ({ onComplete }) => {
       title: '查看原图 🔗',
       content: '点击"在萌哩打开"按钮可以在浏览器中查看高清原图',
       highlight: '.moely-link-button',
-      position: 'top'
+      position: 'left'
     },
     {
-      id: 'cache-manager',
-      title: '缓存管理 💾',
-      content: '点击右上角按钮管理本地缓存，清理空间或重新下载',
-      highlight: '.cache-manager-toggle',
-      position: 'left'
+      id: 'settings',
+      title: '设置 ⚙️',
+      content: '点击设置按钮可以配置开机自启动等选项',
+      highlight: '.settings-button',
+      position: 'center'
     },
     {
       id: 'author',
       title: '关于作者 👨‍💻',
-      content: '本应用由 ACore 开发，致力于为二次元爱好者提供优质壁纸体验',
+      content: '本应用由 MoelyTeam 开发，致力于为二次元爱好者提供优质壁纸体验',
       highlight: null,
       position: 'center'
     },
@@ -132,35 +139,108 @@ const OnboardingTour = ({ onComplete }) => {
 
     const rect = element.getBoundingClientRect();
     const position = currentStepData.position;
+    const tooltipWidth = 350; // 提示框宽度
+    const tooltipHeight = 220; // 提示框高度
+    const margin = 30; // 边距
 
-    switch (position) {
-      case 'top':
-        return {
-          top: rect.top - 20,
-          left: rect.left + rect.width / 2,
-          transform: 'translate(-50%, -100%)'
-        };
-      case 'bottom':
-        return {
-          top: rect.bottom + 20,
-          left: rect.left + rect.width / 2,
-          transform: 'translate(-50%, 0)'
-        };
-      case 'left':
-        return {
-          top: rect.top + rect.height / 2,
-          left: rect.left - 20,
-          transform: 'translate(-100%, -50%)'
-        };
-      case 'right':
-        return {
-          top: rect.top + rect.height / 2,
-          left: rect.right + 20,
-          transform: 'translate(0, -50%)'
-        };
-      default:
-        return {};
+    // 尝试多个定位策略
+    const positions = ['top', 'bottom', 'left', 'right', 'center'];
+    let bestStyle = null;
+    let bestScore = -1;
+
+    for (const pos of positions) {
+      let style = {};
+      
+      switch (pos) {
+        case 'top':
+          style = {
+            top: rect.top - margin,
+            left: rect.left + rect.width / 2,
+            transform: 'translate(-50%, -100%)'
+          };
+          break;
+        case 'bottom':
+          style = {
+            top: rect.bottom + margin,
+            left: rect.left + rect.width / 2,
+            transform: 'translate(-50%, 0)'
+          };
+          break;
+        case 'left':
+          style = {
+            top: rect.top + rect.height / 2,
+            left: rect.left - margin,
+            transform: 'translate(-100%, -50%)'
+          };
+          break;
+        case 'right':
+          style = {
+            top: rect.top + rect.height / 2,
+            left: rect.right + margin,
+            transform: 'translate(0, -50%)'
+          };
+          break;
+        case 'center':
+          style = {
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            position: 'fixed'
+          };
+          break;
+      }
+
+      // 计算这个位置的得分（越高的分数越好）
+      let score = 0;
+      
+      // 检查是否在屏幕范围内
+      const left = typeof style.left === 'string' ? 
+        (style.left === '50%' ? window.innerWidth / 2 : 0) : 
+        style.left;
+      const top = typeof style.top === 'string' ? 
+        (style.top === '50%' ? window.innerHeight / 2 : 0) : 
+        style.top;
+
+      if (pos === 'center') {
+        score = 100; // 居中位置总是安全的
+      } else {
+        // 检查边界
+        const right = left + tooltipWidth;
+        const bottom = top + tooltipHeight;
+        
+        if (left >= margin && right <= window.innerWidth - margin && 
+            top >= margin && bottom <= window.innerHeight - margin) {
+          score = 90; // 完全在屏幕内
+        } else if (left >= 0 && right <= window.innerWidth && 
+                   top >= 0 && bottom <= window.innerHeight) {
+          score = 70; // 部分在屏幕内
+        } else {
+          score = 30; // 超出屏幕
+        }
+        
+        // 优先选择原始位置
+        if (pos === position) {
+          score += 10;
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestStyle = style;
+      }
     }
+
+    // 如果最佳位置仍然有问题，使用居中位置
+    if (bestScore < 50) {
+      bestStyle = {
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        position: 'fixed'
+      };
+    }
+
+    return bestStyle;
   };
 
   // 获取高亮元素的位置和尺寸，用于创建镐空效果

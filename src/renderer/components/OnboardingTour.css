@@ -5,7 +5,7 @@
   left: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 10000;
+  z-index: 1000;
   pointer-events: none;
 }
 
@@ -243,7 +243,7 @@
 /* 高亮元素 */
 .tour-highlight {
   position: relative;
-  z-index: 10001 !important;
+  z-index: 1001 !important;
   box-shadow: 
     0 0 0 3px rgba(255, 0, 180, 0.9) !important,
     0 0 15px rgba(255, 0, 180, 0.7) !important,
