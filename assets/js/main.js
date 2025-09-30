@@ -10,6 +10,10 @@
   rootEl.classList.add('js')
 
   window.addEventListener('load', function () {
+    const loader = document.querySelector('.loader');
+    if (loader) {
+      loader.style.display = 'none';
+    }
     body.classList.add('is-loaded')
   })
 
