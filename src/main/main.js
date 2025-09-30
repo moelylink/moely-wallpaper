@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { setWallpaper } from 'wallpaper';
 import ImageCache from './imageCache.js';
@@ -10,6 +11,9 @@ let mainWindow;
 let imageCache;
 let autoLauncher;
 const API_URL = 'https://gh-proxy.com/https://raw.githubusercontent.com/moelylink/wallpaper-api/refs/heads/main/wallpaper.json';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // 初始化开机自启动
 const initAutoLaunch = () => {
