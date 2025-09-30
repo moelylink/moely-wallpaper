@@ -50,17 +50,17 @@
     "extraMetadata": {
       "main": "src/main/main.js"
     },
-    "mac": {
-      "category": "public.app-category.photography",
-      "icon": "build/icon.icns"
-    },
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico"
+      "icon": "icons/favicon.ico"
+    },
+    "mac": {
+      "category": "public.app-category.photography",
+      "icon": "icons/favicon.icns"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "build/icon.png"
+      "icon": "icons/favicon.png"
     },
     "nsis": {
       "oneClick": false,
