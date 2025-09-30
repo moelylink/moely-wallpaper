@@ -1,4 +1,4 @@
-# 萌哩壁纸 （moely-wallpaper）
+# 萌哩壁纸（moely wallpaper）
 
 一个精美的桌面壁纸应用，专为二次元爱好者设计。图图有惊喜，天天都心喜~
 
