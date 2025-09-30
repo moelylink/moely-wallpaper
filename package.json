@@ -18,8 +18,8 @@
     "electron",
     "react"
   ],
-  "author": "Your Name",
-  "license": "MIT",
+  "author": "moely",
+  "license": "GPL-3.0-only",
   "devDependencies": {
     "@electron/remote": "^2.1.2",
     "concurrently": "^8.2.2",
@@ -37,7 +37,7 @@
     "wallpaper": "^7.2.1"
   },
   "build": {
-    "appId": "com.moely.wallpaper",
+    "appId": "link.moely.wallpaper",
     "productName": "萌哩壁纸",
     "directories": {
       "output": "dist"

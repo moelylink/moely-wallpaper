@@ -9,7 +9,7 @@ const OnboardingTour = ({ onComplete }) => {
     {
       id: 'welcome',
       title: '欢迎使用萌哩壁纸 🎨',
-      content: '发现精美的动漫壁纸，让你的桌面更加个性化！',
+      content: '发现精美的动漫壁纸，让你的桌面更加个性化！图图有惊喜，天天都心喜~',
       highlight: null,
       position: 'center'
     },
@@ -22,7 +22,7 @@ const OnboardingTour = ({ onComplete }) => {
     },
     {
       id: 'set-wallpaper',
-      title: '设为壁纸 🖼️',
+      title: '设置壁纸 🖼️',
       content: '点击此按钮将当前图片设为桌面壁纸',
       highlight: '.set-wallpaper-button',
       position: 'left'
@@ -30,14 +30,14 @@ const OnboardingTour = ({ onComplete }) => {
     {
       id: 'wallpaper-info',
       title: '壁纸信息 ℹ️',
-      content: '在这里查看当前壁纸的ID、画师和来源信息',
+      content: '在页面下方信息栏查看当前壁纸的ID、画师和来源信息',
       highlight: '.wallpaper-info',
       position: 'top'
     },
     {
       id: 'indicators',
       title: '快速跳转 🎯',
-      content: '点击底部指示器可以快速跳转到任意壁纸',
+      content: '您可以点击底部指示器可以快速跳转到任意壁纸',
       highlight: '.indicator-container',
       position: 'top'
     },
@@ -57,15 +57,15 @@ const OnboardingTour = ({ onComplete }) => {
     },
     {
       id: 'author',
-      title: '关于作者 👨‍💻',
-      content: '本应用由 MoelyTeam 开发，致力于为二次元爱好者提供优质壁纸体验',
+      title: '关于我们 👨‍💻',
+      content: '本应用由萌哩开发，致力于为二次元爱好者提供优质壁纸体验，项目已在GitHub上开源。',
       highlight: null,
       position: 'center'
     },
     {
       id: 'complete',
       title: '开始探索 🚀',
-      content: '现在你已经了解了所有功能，开始享受精美的壁纸吧！',
+      content: '现在你已经了解了所有功能，开始享受精美的壁纸吧！（F1键可随时重新观看本指引）',
       highlight: null,
       position: 'center'
     }

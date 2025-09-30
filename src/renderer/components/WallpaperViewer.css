@@ -928,7 +928,7 @@ body, html {
   position: absolute;
   bottom: 20px;
   right: 20px;
-  z-index: 15;
+  z-index: 1005;
 }
 
 /* 在萌哩上查看按钮 */

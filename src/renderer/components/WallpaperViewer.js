@@ -139,7 +139,8 @@ const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart,
   // 设置壁纸
   const handleSetWallpaper = async (wallpaper, isAuto = false) => {
     // 如果没有传入wallpaper参数，使用当前显示的壁纸
-    if (!wallpaper && displayWallpapers.length > 0) {
+    console.log(displayWallpapers.length)
+    if (!wallpaper.id && displayWallpapers.length > 0) {
       wallpaper = displayWallpapers[currentIndex];
     }
     if (!wallpaper) return;

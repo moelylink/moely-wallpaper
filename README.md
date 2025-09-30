@@ -1,6 +1,6 @@
-# 萌哩壁纸 🎨
+# 萌哩壁纸 （moely-wallpaper）
 
-一个精美的桌面壁纸应用，专为二次元爱好者设计。基于 Electron + React 构建，提供流畅的壁纸浏览和设置体验。
+一个精美的桌面壁纸应用，专为二次元爱好者设计。图图有惊喜，天天都心喜~
 
 ## ✨ 功能特性
 
@@ -34,7 +34,7 @@
 ## 🚀 快速开始
 
 ### 环境要求
-- Node.js 16.0 或更高版本
+- Node.js 18.0 或更高版本
 - npm 或 yarn 包管理器
 
 ### 安装依赖
@@ -66,7 +66,7 @@ npm run dist
 ## 📁 项目结构
 
 ```
-moely-wallpaper-2/
+moely-wallpaper/
 ├── src/
 │   ├── main/                 # Electron 主进程
 │   │   ├── main.js          # 主进程入口
@@ -161,11 +161,11 @@ https://gh-proxy.com/https://raw.githubusercontent.com/moelylink/wallpaper-api/r
 
 ## 📄 许可证
 
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+本项目采用 GPL-3 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
 
 ## 👨‍💻 作者
 
-**MoelyTeams** - 致力于为二次元爱好者提供优质壁纸体验
+[萌哩（moely）](https;//www.moely.link/) - 致力于为二次元爱好者提供优质壁纸体验
 
 ---
 
