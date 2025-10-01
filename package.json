@@ -51,6 +51,7 @@
       "main": "src/main/main.js"
     },
     "asarUnpack": [
+      "node_modules/wallpaper/**",
       "node_modules/wallpaper/source/**"
     ],
     "win": {

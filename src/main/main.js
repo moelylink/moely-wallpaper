@@ -4,6 +4,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { setWallpaper } from 'wallpaper';
+import { spawn } from 'child_process';
 import ImageCache from './imageCache.js';
 import AutoLaunch from 'auto-launch';
 
@@ -14,6 +15,73 @@ const API_URL = 'https://gh-proxy.com/https://raw.githubusercontent.com/moelylin
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// 自定义壁纸设置函数，处理打包环境中的路径问题
+const setWallpaperCustom = async (imagePath) => {
+  try {
+    // 首先尝试使用 wallpaper 包的标准方法
+    await setWallpaper(imagePath);
+    return { success: true, method: 'wallpaper-package' };
+  } catch (error) {
+    console.log('Standard wallpaper package failed, trying custom method:', error.message);
+    
+    // 如果标准方法失败，尝试直接调用可执行文件
+    try {
+      // 在打包环境中，wallpaper 包的可执行文件应该在 app.asar.unpacked 目录中
+      const isPackaged = app.isPackaged;
+      let wallpaperExePath;
+      
+      if (isPackaged) {
+        // 打包环境：可执行文件在 app.asar.unpacked 目录中
+        wallpaperExePath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'wallpaper', 'source', 'windows-wallpaper-x86-64.exe');
+      } else {
+        // 开发环境：可执行文件在 node_modules 目录中
+        wallpaperExePath = path.join(__dirname, '..', '..', 'node_modules', 'wallpaper', 'source', 'windows-wallpaper-x86-64.exe');
+      }
+      
+      console.log('Attempting to use wallpaper executable:', wallpaperExePath);
+      console.log('File exists:', fs.existsSync(wallpaperExePath));
+      
+      if (!fs.existsSync(wallpaperExePath)) {
+        throw new Error(`Wallpaper executable not found at: ${wallpaperExePath}`);
+      }
+      
+      // 使用 spawn 调用可执行文件
+      return new Promise((resolve, reject) => {
+        const child = spawn(wallpaperExePath, ['set', imagePath]);
+        
+        let stdout = '';
+        let stderr = '';
+        
+        child.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+        
+        child.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+        
+        child.on('close', (code) => {
+          if (code === 0) {
+            console.log('Custom wallpaper setting successful');
+            resolve({ success: true, method: 'custom-executable', stdout, stderr });
+          } else {
+            console.error('Custom wallpaper setting failed with code:', code);
+            reject(new Error(`Wallpaper executable failed with code ${code}: ${stderr}`));
+          }
+        });
+        
+        child.on('error', (error) => {
+          console.error('Error spawning wallpaper executable:', error);
+          reject(error);
+        });
+      });
+    } catch (customError) {
+      console.error('Custom wallpaper method also failed:', customError);
+      throw new Error(`Both wallpaper methods failed. Standard: ${error.message}, Custom: ${customError.message}`);
+    }
+  }
+};
 
 // 初始化开机自启动
 const initAutoLaunch = () => {
@@ -300,12 +368,13 @@ ipcMain.handle('set-wallpaper', async (event, imageData) => {
       console.log(`Setting wallpaper: ${imagePath}`);
       
       try {
-        await setWallpaper(imagePath);
+        const result = await setWallpaperCustom(imagePath);
         
         return { 
           success: true, 
           message: 'Wallpaper set successfully',
-          imagePath: imagePath
+          imagePath: imagePath,
+          method: result.method
         };
       } catch (setWallpaperError) {
         console.error('Failed to set wallpaper:', setWallpaperError);
