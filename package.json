@@ -50,6 +50,9 @@
     "extraMetadata": {
       "main": "src/main/main.js"
     },
+    "asarUnpack": [
+      "node_modules/wallpaper/source/**"
+    ],
     "win": {
       "target": "nsis",
       "icon": "icons/favicon.ico"
