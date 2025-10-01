@@ -120,7 +120,7 @@ https://gh-proxy.com/https://raw.githubusercontent.com/moelylink/wallpaper-api/r
 
 ## 👨‍💻 关于我们
 
-[萌哩（moely） - 萌萌的二次元美图。收藏美图，收获美好。](https;//www.moely.link/)
+[萌哩（moely） - 萌萌的二次元美图。收藏美图，收获美好。](https://www.moely.link/)
 
 ---
 
