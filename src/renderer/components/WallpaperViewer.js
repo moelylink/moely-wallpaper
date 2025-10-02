@@ -19,6 +19,8 @@ const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart,
   const [lastAutoSetIndex, setLastAutoSetIndex] = useState(-1);
   const [updateStatus, setUpdateStatus] = useState('');
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [cacheStatus, setCacheStatus] = useState('');
+  const [isClearingCache, setIsClearingCache] = useState(false);
   
   // 防抖计时器ref
   const debounceTimerRef = useRef(null);
@@ -188,6 +190,37 @@ const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart,
       setWallpaperStatus(`错误: ${error.message}`);
     } finally {
       setIsSettingWallpaper(false);
+    }
+  };
+
+  // 清除缓存功能
+  const handleClearCache = async () => {
+    if (isClearingCache) return;
+    
+    setIsClearingCache(true);
+    setCacheStatus('正在清除缓存...');
+    
+    try {
+      const result = await ipcRenderer.invoke('clear-cache');
+      
+      if (result.success) {
+        setCacheStatus(`缓存清除成功！删除了 ${result.clearedCount} 个文件`);
+        // 清除成功后，重新加载壁纸数据
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        setCacheStatus(`清除缓存失败：${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error clearing cache:', error);
+      setCacheStatus('清除缓存时发生错误');
+    } finally {
+      setIsClearingCache(false);
+      // 5秒后清除状态
+      setTimeout(() => {
+        setCacheStatus('');
+      }, 5000);
     }
   };
 
@@ -773,9 +806,31 @@ style={{
                 </div>
               </div>
               
+              <div className="setting-item">
+                <div className="setting-label">
+                  <span className="setting-title">清除缓存</span>
+                  <span className="setting-description">清除所有缓存的壁纸图片</span>
+                </div>
+                <div className="setting-control">
+                  <button 
+                    className="clear-cache-button"
+                    onClick={handleClearCache}
+                    disabled={isClearingCache}
+                  >
+                    {isClearingCache ? '清除中...' : '清除缓存'}
+                  </button>
+                </div>
+              </div>
+              
               {updateStatus && (
                 <div className="update-status">
                   {updateStatus}
+                </div>
+              )}
+              
+              {cacheStatus && (
+                <div className="cache-status">
+                  {cacheStatus}
                 </div>
               )}
             </div>

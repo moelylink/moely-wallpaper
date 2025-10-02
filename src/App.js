@@ -199,41 +199,6 @@ function App() {
           <OnboardingTour onComplete={handleOnboardingComplete} />
         )}
         
-        {/* 设置面板 */}
-        {showSettings && (
-          <div className="settings-panel-overlay" onClick={() => setShowSettings(false)}>
-            <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
-              <div className="settings-panel-header">
-                <h3>设置</h3>
-                <button 
-                  className="close-button"
-                  onClick={() => setShowSettings(false)}
-                >
-                  ×
-                </button>
-              </div>
-              
-              <div className="settings-panel-content">
-                <div className="setting-item">
-                  <div className="setting-label">
-                    <span className="setting-title">开机自启动</span>
-                    <span className="setting-description">开机时自动启动萌哩壁纸</span>
-                  </div>
-                  <div className="setting-control">
-                    <label className="switch">
-                      <input 
-                        type="checkbox" 
-                        checked={autoStart}
-                        onChange={(e) => handleAutoStartChange(e.target.checked)}
-                      />
-                      <span className="slider"></span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

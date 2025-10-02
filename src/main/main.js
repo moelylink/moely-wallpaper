@@ -303,6 +303,25 @@ ipcMain.handle('set-auto-start', async (event, enabled) => {
   }
 });
 
+// Handler for clearing cache
+ipcMain.handle('clear-cache', async (event) => {
+  try {
+    const clearedCount = imageCache.clearCache();
+    console.log('Cache cleared successfully');
+    return {
+      success: true,
+      message: '缓存清除成功',
+      clearedCount: clearedCount
+    };
+  } catch (error) {
+    console.error('Error clearing cache:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
 // Handler for checking updates
 ipcMain.handle('check-update', async (event) => {
   try {

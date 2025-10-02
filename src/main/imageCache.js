@@ -271,6 +271,7 @@ class ImageCache {
   // 清理缓存
   clearCache() {
     try {
+      let clearedCount = 0;
       if (fs.existsSync(this.cacheDir)) {
         // 首先尝试删除所有文件
         const files = fs.readdirSync(this.cacheDir);
@@ -280,6 +281,7 @@ class ImageCache {
             const stat = fs.statSync(filePath);
             if (stat.isFile()) {
               fs.unlinkSync(filePath);
+              clearedCount++;
             }
           } catch (fileError) {
             console.log(`Failed to delete file ${filePath}:`, fileError.message);
@@ -289,8 +291,9 @@ class ImageCache {
         
         // 然后重新创建缓存目录
         this.ensureCacheDir();
-        console.log('Cache cleared successfully');
+        console.log(`Cache cleared successfully. Removed ${clearedCount} files.`);
       }
+      return clearedCount;
     } catch (error) {
       console.error('Error clearing cache:', error);
       throw error;
