@@ -9,7 +9,7 @@ const OnboardingTour = ({ onComplete }) => {
     {
       id: 'welcome',
       title: '欢迎使用萌哩壁纸 🎨',
-      content: '发现精美的动漫壁纸，让你的桌面更加个性化！图图有惊喜，天天都心喜~',
+      content: '发现精美的动漫壁纸，让你的桌面更加个性化！壁纸每日更新，图图有惊喜，天天都心喜~',
       highlight: null,
       position: 'center'
     },
@@ -23,7 +23,7 @@ const OnboardingTour = ({ onComplete }) => {
     {
       id: 'set-wallpaper',
       title: '设置壁纸 🖼️',
-      content: '点击此按钮将当前图片设为桌面壁纸',
+      content: '点击此按钮将当前图片设为桌面壁纸，开启自动壁纸后将自动设置',
       highlight: '.set-wallpaper-button',
       position: 'left'
     },
@@ -51,7 +51,7 @@ const OnboardingTour = ({ onComplete }) => {
     {
       id: 'settings',
       title: '设置 ⚙️',
-      content: '点击设置按钮可以配置开机自启动等选项',
+      content: '您可以在设置面板中设定开机自启，支持手动清除本地缓存',
       highlight: '.settings-button',
       position: 'center'
     },
