@@ -1,7 +1,7 @@
 {
   "name": "moely-wallpaper",
-  "version": "1.0.0",
-  "description": "萌哩 - PC端壁纸软件",
+  "version": "1.0.1",
+  "description": "萌哩壁纸 - 每日随机二次元壁纸。图图有惊喜，天天都心喜。",
   "type": "module",
   "main": "src/main/main.js",
   "scripts": {
@@ -14,6 +14,7 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [
+    "moely",
     "wallpaper",
     "electron",
     "react"

@@ -104,10 +104,13 @@ moely-wallpaper/
 
 ## 🌐 API 数据源
 
-应用从以下API获取壁纸数据：
+应用从以下 API 获取壁纸数据（已使用代理加速）：
+
 ```
 https://gh-proxy.com/https://raw.githubusercontent.com/moelylink/wallpaper-api/refs/heads/main/wallpaper.json
 ```
+
+API 开源地址： https://github.com/moelylink/wallpaper-api
 
 ## 📄 许可证
 
