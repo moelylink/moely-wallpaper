@@ -45,6 +45,14 @@ class ImageCache {
         fs.unlinkSync(localPath);
         return false;
       }
+      
+      // 检查缓存是否过期（7天）
+      if (this.isCacheExpired(url)) {
+        console.log(`Removing expired cached file: ${localPath}`);
+        this.removeExpiredCache(url);
+        return false;
+      }
+      
       return true;
     } catch (error) {
       console.error(`Error checking file stats:`, error);
@@ -72,6 +80,58 @@ class ImageCache {
     } catch (error) {
       console.error('Error writing metadata:', error);
     }
+  }
+
+  // 检查缓存是否过期（7天）
+  isCacheExpired(url) {
+    const metadata = this.readMetadata();
+    const cacheInfo = metadata[url];
+    
+    if (!cacheInfo || !cacheInfo.downloadTime) {
+      return true; // 没有下载时间信息，认为已过期
+    }
+    
+    const downloadTime = new Date(cacheInfo.downloadTime);
+    const now = new Date();
+    const daysDiff = (now - downloadTime) / (1000 * 60 * 60 * 24);
+    
+    return daysDiff > 7; // 超过7天认为过期
+  }
+
+  // 移除过期的缓存
+  removeExpiredCache(url) {
+    try {
+      const localPath = this.getLocalPath(url);
+      if (fs.existsSync(localPath)) {
+        fs.unlinkSync(localPath);
+      }
+      
+      // 从元数据中移除
+      const metadata = this.readMetadata();
+      delete metadata[url];
+      this.writeMetadata(metadata);
+      
+      console.log(`Removed expired cache for: ${url}`);
+    } catch (error) {
+      console.error(`Error removing expired cache for ${url}:`, error);
+    }
+  }
+
+  // 清理所有过期缓存
+  cleanupExpiredCache() {
+    console.log('Starting cleanup of expired cache...');
+    const metadata = this.readMetadata();
+    let cleanedCount = 0;
+    
+    for (const url in metadata) {
+      if (this.isCacheExpired(url)) {
+        this.removeExpiredCache(url);
+        cleanedCount++;
+      }
+    }
+    
+    console.log(`Cleanup completed. Removed ${cleanedCount} expired cache entries.`);
+    return cleanedCount;
   }
 
   // 下载并缓存图片

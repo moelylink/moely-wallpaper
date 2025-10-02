@@ -155,6 +155,17 @@ function createWindow() {
 app.on('ready', () => {
   // 初始化图片缓存
   imageCache = new ImageCache();
+  
+  // 启动时清理过期缓存
+  try {
+    const cleanedCount = imageCache.cleanupExpiredCache();
+    if (cleanedCount > 0) {
+      console.log(`Cleaned up ${cleanedCount} expired cache entries on startup`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up expired cache on startup:', error);
+  }
+  
   // 初始化开机自启动
   initAutoLaunch();
   createWindow();
@@ -289,6 +300,37 @@ ipcMain.handle('set-auto-start', async (event, enabled) => {
   } catch (error) {
     console.error('Error setting auto start:', error);
     throw error;
+  }
+});
+
+// Handler for checking updates
+ipcMain.handle('check-update', async (event) => {
+  try {
+    const response = await axios.get('https://wallpaper.moely.link/app/version.txt', {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    const latestVersion = response.data.trim();
+    const currentVersion = app.getVersion();
+    
+    console.log(`Current version: ${currentVersion}, Latest version: ${latestVersion}`);
+    
+    return {
+      success: true,
+      currentVersion: currentVersion,
+      latestVersion: latestVersion,
+      hasUpdate: latestVersion !== currentVersion,
+      updateUrl: 'https://wallpaper.moely.link/app/setup.exe'
+    };
+  } catch (error) {
+    console.error('Error checking for updates:', error);
+    return {
+      success: false,
+      error: error.message
+    };
   }
 });
 

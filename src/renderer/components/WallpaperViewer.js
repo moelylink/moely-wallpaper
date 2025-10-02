@@ -17,6 +17,8 @@ const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart,
   const [wallpaperStatus, setWallpaperStatus] = useState('');
   const [autoSetWallpaper, setAutoSetWallpaper] = useState(false);
   const [lastAutoSetIndex, setLastAutoSetIndex] = useState(-1);
+  const [updateStatus, setUpdateStatus] = useState('');
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   
   // 防抖计时器ref
   const debounceTimerRef = useRef(null);
@@ -186,6 +188,41 @@ const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart,
       setWallpaperStatus(`错误: ${error.message}`);
     } finally {
       setIsSettingWallpaper(false);
+    }
+  };
+
+  // 检查更新功能
+  const handleCheckUpdate = async () => {
+    if (isCheckingUpdate) return;
+    
+    setIsCheckingUpdate(true);
+    setUpdateStatus('正在检查更新...');
+    
+    try {
+      const result = await ipcRenderer.invoke('check-update');
+      
+      if (result.success) {
+        if (result.hasUpdate) {
+          setUpdateStatus(`发现新版本 ${result.latestVersion}！当前版本：${result.currentVersion}`);
+          // 可以在这里添加打开下载链接的逻辑
+          setTimeout(() => {
+            window.open(result.updateUrl, '_blank');
+          }, 2000);
+        } else {
+          setUpdateStatus('已是最新版本');
+        }
+      } else {
+        setUpdateStatus(`检查更新失败：${result.error}`);
+      }
+    } catch (error) {
+      console.error('Error checking for updates:', error);
+      setUpdateStatus('检查更新时发生错误');
+    } finally {
+      setIsCheckingUpdate(false);
+      // 3秒后清除状态
+      setTimeout(() => {
+        setUpdateStatus('');
+      }, 3000);
     }
   };
 
@@ -719,6 +756,28 @@ style={{
                   </label>
                 </div>
               </div>
+              
+              <div className="setting-item">
+                <div className="setting-label">
+                  <span className="setting-title">检查更新</span>
+                  <span className="setting-description">检查是否有新版本可用</span>
+                </div>
+                <div className="setting-control">
+                  <button 
+                    className="check-update-button"
+                    onClick={handleCheckUpdate}
+                    disabled={isCheckingUpdate}
+                  >
+                    {isCheckingUpdate ? '检查中...' : '检查更新'}
+                  </button>
+                </div>
+              </div>
+              
+              {updateStatus && (
+                <div className="update-status">
+                  {updateStatus}
+                </div>
+              )}
             </div>
           </div>
         </div>

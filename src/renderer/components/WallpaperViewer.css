@@ -1269,6 +1269,51 @@ input:checked + .slider:before {
   box-shadow: 0 0 10px rgba(255, 0, 180, 0.3);
 }
 
+/* 检查更新按钮 */
+.check-update-button {
+  background: linear-gradient(135deg, #ff00b4, #ff6b9d);
+  border: none;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 100px;
+}
+
+.check-update-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff6b9d, #ff00b4);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 0, 180, 0.4);
+}
+
+.check-update-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.check-update-button:disabled {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 更新状态显示 */
+.update-status {
+  background: rgba(255, 0, 180, 0.1);
+  border: 1px solid rgba(255, 0, 180, 0.3);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 15px;
+  color: #ffffff;
+  font-size: 0.9rem;
+  text-align: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
 /* 自动壁纸按钮激活状态 */
 .auto-wallpaper-button.active {
   background: linear-gradient(135deg, #00ff88, #00cc66);
