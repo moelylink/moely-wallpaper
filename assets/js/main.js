@@ -10,7 +10,7 @@
   rootEl.classList.add('js')
 
   window.addEventListener('load', function () {
-    const loader = document.querySelector('.loader');
+    const loader = document.querySelector('.loader-cover');
     if (loader) {
       loader.style.display = 'none';
     }

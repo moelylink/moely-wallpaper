@@ -1525,6 +1525,13 @@ body,a,h1,h2,h3,h4,h5,h6,.h1,.h2,.h3,.h4,.h5,.h6 {
   transform: translate3d(-50%, -50%, 0);
   z-index: 99;
 }
+.loader-cover {
+	position: fixed;
+	width: 100%;
+	height: 100%;
+	background-color: rgba(0,0,0,0.5);
+	z-index: 90;
+}
 .dot {
   width: 24px;
   height: 24px;
