@@ -1,12 +1,11 @@
 # 萌哩壁纸（moely wallpaper）
 
-一个精美的桌面壁纸应用，专为二次元爱好者设计。图图有惊喜，天天都心喜~
+一个精美的桌面壁纸应用，专为二次元爱好者设计。壁纸每日更新，图图有惊喜，天天都心喜~
 
 ## ✨ 功能特性
 
 ### 🖼️ 壁纸浏览
 - **3D轮播效果**：流畅的3D切换动画，支持左右滑动浏览
-- **智能预加载**：自动预加载壁纸，提升浏览体验
 - **多种操作方式**：支持键盘方向键、鼠标滚轮、点击切换
 - **快速跳转**：底部指示器支持快速跳转到任意壁纸
 
@@ -43,10 +42,6 @@ npm start
 
 ### 构建应用
 ```bash
-# 构建 React 应用
-npm run build:react
-
-# 构建 Electron 应用
 npm run build
 ```
 
@@ -109,7 +104,7 @@ moely-wallpaper/
 
 ## 🌐 API 数据源
 
-应用从以下 API 获取壁纸数据：
+应用从以下API获取壁纸数据：
 ```
 https://gh-proxy.com/https://raw.githubusercontent.com/moelylink/wallpaper-api/refs/heads/main/wallpaper.json
 ```
