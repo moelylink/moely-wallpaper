@@ -9,7 +9,7 @@ const OnboardingTour = ({ onComplete }) => {
     {
       id: 'welcome',
       title: '欢迎使用萌哩壁纸 🎨',
-      content: '发现精美的动漫壁纸，让你的桌面更加个性化！壁纸每日更新，图图有惊喜，天天都心喜~',
+      content: '发现精美的动漫壁纸，让你的桌面更加个性化！壁纸每日更新，图图有惊喜，天天都欣喜~',
       highlight: null,
       position: 'center'
     },
