@@ -3,6 +3,7 @@ import WallpaperViewer from './renderer/components/WallpaperViewer.js';
 import ParticleBackground from './renderer/components/ParticleBackground.js';
 import TitleBar from './renderer/components/TitleBar.js';
 import OnboardingTour from './renderer/components/OnboardingTour.js';
+import AnnouncementModal from './renderer/components/AnnouncementModal.js';
 import './renderer/styles/App.css';
 
 const { ipcRenderer } = window.require('electron');
@@ -14,6 +15,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [autoStart, setAutoStart] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   // 检查是否首次使用
   useEffect(() => {
@@ -26,6 +28,23 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [wallpapers]); // 依赖wallpapers，确保数据加载完成后才显示引导
+
+  useEffect(() => {
+    const loadNotice = async () => {
+      try {
+        const data = await ipcRenderer.invoke('fetch-notice');
+        if (data && data.contentHash) {
+          const dismissed = localStorage.getItem('moely-notice-dismissed-hash');
+          if (dismissed !== data.contentHash) {
+            setNotice(data);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load notice.md:', e);
+      }
+    };
+    loadNotice();
+  }, []);
 
   useEffect(() => {
     const fetchWallpapers = async () => {
@@ -116,6 +135,13 @@ function App() {
     setShowOnboarding(true);
   };
 
+  const handleNoticeDismiss = () => {
+    if (notice && notice.contentHash) {
+      localStorage.setItem('moely-notice-dismissed-hash', notice.contentHash);
+    }
+    setNotice(null);
+  };
+
   // 加载设置
   useEffect(() => {
     const loadSettings = async () => {
@@ -198,7 +224,11 @@ function App() {
         {showOnboarding && (
           <OnboardingTour onComplete={handleOnboardingComplete} />
         )}
-        
+
+        {notice && !showOnboarding && (
+          <AnnouncementModal notice={notice} onDismiss={handleNoticeDismiss} />
+        )}
+
       </div>
     </>
   );

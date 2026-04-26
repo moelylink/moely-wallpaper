@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 import axios from 'axios';
 import { setWallpaper } from 'wallpaper';
 import { spawn } from 'child_process';
@@ -13,6 +14,9 @@ let mainWindow;
 let imageCache;
 let autoLauncher;
 const API_URL = 'https://gh-proxy.com/https://raw.githubusercontent.com/moelylink/wallpaper-api/refs/heads/main/wallpaper.json';
+
+// 每次启动拉取 Markdown 公告
+const NOTICE_MD_URL = 'https://wallpaper.moely.link/notice.md';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -322,6 +326,30 @@ ipcMain.handle('clear-cache', async (event) => {
       success: false,
       error: error.message
     };
+  }
+});
+
+// 拉取 notice.md 纯文本，返回内容与 SHA256 便于本地判断是否已读
+ipcMain.handle('fetch-notice', async () => {
+  try {
+    const response = await retryRequest(
+      () => axios.get(NOTICE_MD_URL, { ...axiosConfig, responseType: 'text' }),
+      2,
+      1500
+    );
+    if (!response || response.data == null) {
+      return null;
+    }
+    const text = String(response.data);
+    const markdown = text.trim();
+    if (!markdown) {
+      return null;
+    }
+    const contentHash = crypto.createHash('sha256').update(markdown, 'utf8').digest('hex');
+    return { markdown, contentHash };
+  } catch (error) {
+    console.error('Error fetching notice.md:', error);
+    return null;
   }
 });
 
