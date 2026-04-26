@@ -3,6 +3,7 @@ import path from 'path';
 import axios from 'axios';
 import crypto from 'crypto';
 import { app } from 'electron';
+import { getAppUserAgent } from './userAgent.js';
 
 class ImageCache {
   constructor() {
@@ -152,7 +153,7 @@ class ImageCache {
         responseType: 'stream',
         timeout: 30000, // 30秒超时
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          'User-Agent': getAppUserAgent()
         }
       });
 

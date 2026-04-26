@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, session } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -6,6 +6,7 @@ import axios from 'axios';
 import { setWallpaper } from 'wallpaper';
 import { spawn } from 'child_process';
 import ImageCache from './imageCache.js';
+import { getAppUserAgent } from './userAgent.js';
 import AutoLaunch from 'auto-launch';
 
 let mainWindow;
@@ -96,7 +97,7 @@ const initAutoLaunch = () => {
 const axiosConfig = {
   timeout: 10000, // 10 seconds timeout (reduced from 30)
   headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
+    'User-Agent': getAppUserAgent()
   },
   // Force IPv4 to avoid IPv6 connection issues
   family: 4
@@ -153,6 +154,8 @@ function createWindow() {
 }
 
 app.on('ready', () => {
+  session.defaultSession.setUserAgent(getAppUserAgent());
+
   // 初始化图片缓存
   imageCache = new ImageCache();
   
@@ -328,7 +331,7 @@ ipcMain.handle('check-update', async (event) => {
     const response = await axios.get('https://wallpaper.moely.link/app/version.txt', {
       timeout: 10000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': getAppUserAgent()
       }
     });
     
