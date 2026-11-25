@@ -116,6 +116,9 @@ out/
 # Electron builder output
 dist_electron/
 
+# Backup files
+*.backup
+
 # macOS
 .DS_Store
 .AppleDouble

@@ -1,0 +1,184 @@
+.tray-menu-shell {
+  width: 100%;
+  height: 100vh;
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  user-select: none;
+  background: transparent;
+}
+
+.tray-menu-panel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: rgba(24, 24, 29, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
+}
+
+.tray-menu-panel .tray-menu-thumb-wrap {
+  width: 100%;
+  height: 98px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.tray-menu-panel .tray-menu-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tray-menu-panel .tray-menu-header {
+  padding: 4px 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tray-menu-panel .tray-menu-caption {
+  font-size: 11px;
+  line-height: 14px;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.tray-menu-panel .tray-menu-info {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tray-menu-panel .tray-menu-id {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.tray-menu-panel .tray-menu-artist {
+  font-size: 12px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, 0.65);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tray-menu-panel .tray-menu-empty {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.tray-menu-panel .tray-menu-switch-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.tray-menu-panel .tray-menu-switch-btn {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12.5px;
+  line-height: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.tray-menu-panel .tray-menu-switch-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.tray-menu-panel .tray-menu-switch-btn:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.tray-menu-panel .tray-menu-switch-btn:disabled {
+  color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: not-allowed;
+}
+
+.tray-menu-panel .tray-menu-divider {
+  height: 1px;
+  margin: 7px 2px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.tray-menu-panel .tray-menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tray-menu-panel .tray-menu-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  border-radius: 7px;
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.tray-menu-panel .tray-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.tray-menu-panel .tray-menu-item:active {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.tray-menu-panel .tray-menu-item--danger:hover {
+  background: rgba(235, 87, 87, 0.16);
+  color: #ff8a8a;
+}
+
+.tray-menu-panel .tray-menu-item-icon {
+  flex: 0 0 15px;
+  width: 15px;
+  height: 15px;
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.tray-menu-panel .tray-menu-item:hover .tray-menu-item-icon,
+.tray-menu-panel .tray-menu-switch-btn:hover:not(:disabled) .tray-menu-item-icon {
+  color: #ffffff;
+}
+
+.tray-menu-panel .tray-menu-item--danger:hover .tray-menu-item-icon {
+  color: #ff8a8a;
+}

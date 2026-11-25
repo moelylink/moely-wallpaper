@@ -1,8 +1,14 @@
 import React, { useEffect, useRef } from 'react';
+import { DEFAULT_THEME_COLOR, hexToRgbString } from '../utils/themeColor.js';
 import './ParticleBackground.css';
 
-const ParticleBackground = () => {
+const ParticleBackground = ({ themeColor = DEFAULT_THEME_COLOR }) => {
   const canvasRef = useRef(null);
+  const rgbRef = useRef(hexToRgbString(themeColor));
+
+  useEffect(() => {
+    rgbRef.current = hexToRgbString(themeColor);
+  }, [themeColor]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -48,14 +54,15 @@ const ParticleBackground = () => {
       }
 
       draw() {
+        const rgb = rgbRef.current;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 0, 180, ${this.opacity})`;
+        ctx.fillStyle = `rgba(${rgb}, ${this.opacity})`;
         ctx.fill();
         
         // Add glow effect
         ctx.shadowBlur = 10;
-        ctx.shadowColor = 'rgba(255, 0, 180, 0.5)';
+        ctx.shadowColor = `rgba(${rgb}, 0.5)`;
         ctx.fill();
         ctx.shadowBlur = 0;
       }
@@ -90,7 +97,7 @@ const ParticleBackground = () => {
             ctx.beginPath();
             ctx.moveTo(p1.x, p1.y);
             ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = `rgba(255, 0, 180, ${opacity})`;
+            ctx.strokeStyle = `rgba(${rgbRef.current}, ${opacity})`;
             ctx.lineWidth = 1;
             ctx.stroke();
           }

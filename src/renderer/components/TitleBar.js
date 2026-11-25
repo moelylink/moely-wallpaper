@@ -1,28 +1,27 @@
 import React from 'react';
 import './TitleBar.css';
+import appLogo from '../assets/logo.png';
 
-const { ipcRenderer } = window.require('electron');
+const api = window.wallpaperAPI;
 
 const TitleBar = () => {
   const handleMinimize = () => {
-    ipcRenderer.send('window-minimize');
+    api.minimize();
   };
 
   const handleMaximize = () => {
-    ipcRenderer.send('window-maximize');
+    api.maximize();
   };
 
   const handleClose = () => {
-    ipcRenderer.send('window-close');
+    api.close();
   };
 
   return (
     <div className="title-bar">
       <div className="title-bar-drag">
         <div className="title-bar-title">
-          <svg className="title-bar-icon" viewBox="0 0 24 24" fill="none">
-            <path d="M4 16L10 10L4 4M14 4L20 10L14 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+          <img className="title-bar-icon" src={appLogo} alt="" aria-hidden="true" />
           <span>萌哩壁纸</span>
         </div>
       </div>

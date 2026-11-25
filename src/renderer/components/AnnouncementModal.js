@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import './AnnouncementModal.css';
 
-const { ipcRenderer } = window.require('electron');
+const api = window.wallpaperAPI;
 
 /**
  * @param {object} props
@@ -18,7 +18,7 @@ const AnnouncementModal = ({ notice, onDismiss }) => {
   const openExternal = (e, url) => {
     e.preventDefault();
     if (url) {
-      ipcRenderer.invoke('open-external', url).catch((err) => {
+      api.openExternal(url).catch((err) => {
         console.error('open-external failed:', err);
       });
     }

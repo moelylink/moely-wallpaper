@@ -1,173 +1,196 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import WallpaperViewer from './renderer/components/WallpaperViewer.js';
 import ParticleBackground from './renderer/components/ParticleBackground.js';
 import TitleBar from './renderer/components/TitleBar.js';
 import OnboardingTour from './renderer/components/OnboardingTour.js';
 import AnnouncementModal from './renderer/components/AnnouncementModal.js';
+import { DEFAULT_THEME_COLOR, applyThemeColorToDocument, normalizeHexColor } from './renderer/utils/themeColor.js';
+import Toast from './renderer/components/Toast.js';
 import './renderer/styles/App.css';
 
-const { ipcRenderer } = window.require('electron');
+const api = window.wallpaperAPI;
 
 function App() {
   const [wallpapers, setWallpapers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [warning, setWarning] = useState('');
   const [showSettings, setShowSettings] = useState(false);
-  const [autoStart, setAutoStart] = useState(true);
+  const [autoStart, setAutoStart] = useState(false);
+  const [closeBehavior, setCloseBehavior] = useState('tray');
+  const [themeColor, setThemeColor] = useState(DEFAULT_THEME_COLOR);
+  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [toasts, setToasts] = useState([]);
+  const toastIdRef = useRef(0);
 
-  // 检查是否首次使用
-  useEffect(() => {
-    const isFirstTime = !localStorage.getItem('moely-wallpaper-tour-completed');
-    if (isFirstTime) {
-      // 延迟显示新手引导，等待UI加载完成
-      const timer = setTimeout(() => {
-        setShowOnboarding(true);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [wallpapers]); // 依赖wallpapers，确保数据加载完成后才显示引导
-
-  useEffect(() => {
-    const loadNotice = async () => {
-      try {
-        const data = await ipcRenderer.invoke('fetch-notice');
-        if (data && data.contentHash) {
-          const dismissed = localStorage.getItem('moely-notice-dismissed-hash');
-          if (dismissed !== data.contentHash) {
-            setNotice(data);
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load notice.md:', e);
+  const notify = useCallback(options => {
+    const id = options?.id ?? ++toastIdRef.current;
+    const nextToast = { ...options, id };
+    setToasts(previous => {
+      const index = previous.findIndex(item => item.id === id);
+      if (index !== -1) {
+        const updated = [...previous];
+        updated[index] = nextToast;
+        return updated;
       }
-    };
-    loadNotice();
+      return [...previous.slice(-3), nextToast];
+    });
+    return id;
+  }, []);
+
+  const dismissToast = useCallback(id => {
+    setToasts(previous => previous.filter(item => item.id !== id));
   }, []);
 
   useEffect(() => {
+    if (loading || !wallpapers.length || localStorage.getItem('moely-wallpaper-tour-completed')) return;
+    const timer = setTimeout(() => setShowOnboarding(true), 1000);
+    return () => clearTimeout(timer);
+  }, [loading, wallpapers.length]);
+
+  useEffect(() => {
+    let active = true;
+    api.fetchNotice().then(data => {
+      if (active && data?.contentHash && localStorage.getItem('moely-notice-dismissed-hash') !== data.contentHash) {
+        setNotice(data);
+      }
+    }).catch(error => console.error('Failed to load notice:', error));
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const requestId = crypto.randomUUID();
+    const unsubscribe = api.onImageCached(cached => {
+      if (!active) return;
+      setWallpapers(previous => previous.map(wallpaper =>
+        wallpaper.id === cached.id && wallpaper.originalUrl === cached.originalUrl
+          ? { ...wallpaper, imageUrl: cached.imageUrl, isLocal: true }
+          : wallpaper
+      ));
+    });
     const fetchWallpapers = async () => {
       try {
         setLoading(true);
         setError(null);
-        
-        // 添加超时处理
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('请求超时，请检查网络连接')), 15000);
-        });
-        
-        const dataPromise = ipcRenderer.invoke('fetch-wallpapers');
-        const data = await Promise.race([dataPromise, timeoutPromise]);
-        
-        setWallpapers(data);
-        
-        // 后台静默缓存未缓存的图片
-        const uncachedWallpapers = data.filter(wp => !wp.isLocal);
-        if (uncachedWallpapers.length > 0) {
-          console.log(`Found ${uncachedWallpapers.length} uncached images, starting silent cache process...`);
-          startSilentImageCaching(uncachedWallpapers);
+        // 总时限与重试由主进程统一管理，卸载时发送明确的取消信号。
+        const result = await api.fetchWallpapers(requestId);
+        if (!active || result.cancelled) return;
+        if (!result.success) throw new Error(result.error || '加载失败，请重试');
+        setWallpapers(result.wallpapers);
+        setWarning(result.warning || '');
+        if (!result.offline && result.wallpapers.some(wallpaper => !wallpaper.isLocal)) {
+          api.cacheImages().catch(error => {
+            if (active) console.error('Background caching failed:', error);
+          });
         }
-        
-      } catch (err) {
-        console.error('Error fetching wallpapers:', err);
-        setError(err.message || '加载失败，请重试');
+      } catch (error) {
+        if (active) setError(error.message || '加载失败，请重试');
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
-
     fetchWallpapers();
+    return () => {
+      active = false;
+      unsubscribe();
+      api.cancelFetchWallpapers(requestId);
+    };
   }, []);
 
-  // 后台静默缓存图片
-  const startSilentImageCaching = async (wallpapersToCache) => {
+  const handleAutoStartChange = async enabled => {
+    const previous = autoStart;
+    setAutoStart(enabled);
     try {
-      console.log('Starting silent background caching...');
-      
-      const results = await ipcRenderer.invoke('cache-images', wallpapersToCache);
-      
-      // 静默更新wallpapers状态，使用本地缓存的图片
-      setWallpapers(prevWallpapers => {
-        return prevWallpapers.map(wp => {
-          const cachedResult = results.find(r => r.id === wp.id);
-          if (cachedResult && cachedResult.cached) {
-            return {  
-              ...wp,
-              imageUrl: `file://${cachedResult.localPath}`,
-              isLocal: true
-            };
-          }
-          return wp;
-        });
-      });
-      
-      console.log('Silent caching completed');
-    } catch (err) {
-      console.error('Error in silent caching:', err);
-    }
-  };
-
-  // 切换设置面板
-  const toggleSettings = () => {
-    setShowSettings(!showSettings);
-  };
-
-  // 处理开机自启动开关
-  const handleAutoStartChange = async (enabled) => {
-    try {
-      setAutoStart(enabled);
-      await ipcRenderer.invoke('set-auto-start', enabled);
+      await api.setAutoStart(enabled);
     } catch (error) {
-      console.error('Failed to set auto start:', error);
-      alert('设置开机自启动失败：' + error.message);
+      setAutoStart(previous);
+      notify({ type: 'error', title: '设置开机自启动失败', description: error.message, duration: 5000 });
     }
   };
 
-  // 新手引导完成处理
-  const handleOnboardingComplete = () => {
-    setShowOnboarding(false);
-    console.log('新手引导完成');
+  const handleCloseBehaviorChange = async behavior => {
+    const previous = closeBehavior;
+    setCloseBehavior(behavior);
+    try {
+      await api.setCloseBehavior(behavior);
+    } catch (error) {
+      setCloseBehavior(previous);
+      notify({ type: 'error', title: '设置关闭窗口行为失败', description: error.message, duration: 5000 });
+    }
   };
 
-  // 手动显示新手引导（用于调试或重新查看）
-  const showTourManually = () => {
-    setShowOnboarding(true);
+  const handleThemeColorChange = async color => {
+    const normalized = normalizeHexColor(color);
+    if (!normalized) return;
+    const previous = themeColor;
+    setThemeColor(normalized);
+    applyThemeColorToDocument(normalized);
+    try {
+      await api.setThemeColor(normalized);
+    } catch (error) {
+      setThemeColor(previous);
+      applyThemeColorToDocument(previous);
+      notify({ type: 'error', title: '设置主题色失败', description: error.message, duration: 5000 });
+    }
+  };
+
+  const handleCacheCleared = () => {
+    // 不刷新页面，否则启动逻辑会立即重新下载刚刚删除的缓存。
+    setWallpapers(previous => previous.map(wallpaper => ({
+      ...wallpaper, imageUrl: wallpaper.originalUrl, isLocal: false
+    })));
   };
 
   const handleNoticeDismiss = () => {
-    if (notice && notice.contentHash) {
-      localStorage.setItem('moely-notice-dismissed-hash', notice.contentHash);
-    }
+    if (notice?.contentHash) localStorage.setItem('moely-notice-dismissed-hash', notice.contentHash);
     setNotice(null);
   };
 
-  // 加载设置
   useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const settings = await ipcRenderer.invoke('get-settings');
-        setAutoStart(settings.autoStart !== false); // 默认开启
-      } catch (error) {
-        console.error('Failed to load settings:', error);
-      }
-    };
-    loadSettings();
+    let active = true;
+    applyThemeColorToDocument(DEFAULT_THEME_COLOR);
+    api.getSettings().then(settings => {
+      if (!active) return;
+      setAutoStart(settings.autoStart === true);
+      setCloseBehavior(settings.closeBehavior === 'exit' ? 'exit' : 'tray');
+      const nextColor = applyThemeColorToDocument(settings.themeColor || DEFAULT_THEME_COLOR);
+      setThemeColor(nextColor);
+    }).catch(error => console.error('Failed to load settings:', error));
+    return () => { active = false; };
   }, []);
 
-  // 监听键盘事件，支持快捷键重新显示引导
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      // F1 键显示新手引导
-      if (e.key === 'F1') {
-        e.preventDefault();
-        showTourManually();
+    const handleKeyDown = event => {
+      if (event.key === 'F1') {
+        event.preventDefault();
+        setShowOnboarding(true);
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (typeof api.onFullscreenChange !== 'function') return undefined;
+    return api.onFullscreenChange(fullscreen => {
+      if (!fullscreen) setIsPreviewFullscreen(false);
+    });
+  }, []);
+
+  const handleEnterPreview = () => {
+    setIsPreviewFullscreen(true);
+    api.setFullscreen?.(true)?.catch?.(() => {});
+  };
+
+  const handleExitPreview = () => {
+    setIsPreviewFullscreen(false);
+    api.setFullscreen?.(false)?.catch?.(() => {});
+  };
+
+  const toastView = <Toast toasts={toasts} onDismiss={dismissToast} />;
 
   if (loading) {
     return (
@@ -181,6 +204,7 @@ function App() {
             <div className="loading-subtitle">首次加载可能需要较长时间</div>
           </div>
         </div>
+        {toastView}
       </>
     );
   }
@@ -195,41 +219,41 @@ function App() {
             <div className="error-icon">⚠️</div>
             <div className="error-text">加载失败</div>
             <div className="error-message">{error}</div>
-            <button 
-              className="retry-button" 
-              onClick={() => window.location.reload()}
-            >
-              重新加载
-            </button>
+            <button className="retry-button" onClick={() => window.location.reload()}>重新加载</button>
           </div>
         </div>
+        {toastView}
       </>
     );
   }
 
   return (
     <>
-      <TitleBar />
+      {!isPreviewFullscreen && <TitleBar />}
       <div className="App">
-        <ParticleBackground />
-        <WallpaperViewer 
-          wallpapers={wallpapers} 
+        <ParticleBackground themeColor={themeColor} />
+        {!isPreviewFullscreen && warning && <div className="network-warning" role="status">{warning}</div>}
+        <WallpaperViewer
+          wallpapers={wallpapers}
           showSettings={showSettings}
+          interactionBlocked={showOnboarding || !!notice}
           setShowSettings={setShowSettings}
           autoStart={autoStart}
           handleAutoStartChange={handleAutoStartChange}
+          closeBehavior={closeBehavior}
+          handleCloseBehaviorChange={handleCloseBehaviorChange}
+          themeColor={themeColor}
+          handleThemeColorChange={handleThemeColorChange}
+          isPreviewFullscreen={isPreviewFullscreen}
+          onEnterPreview={handleEnterPreview}
+          onExitPreview={handleExitPreview}
+          onCacheCleared={handleCacheCleared}
+          onNotify={notify}
         />
-
-        {/* 新手引导组件 */}
-        {showOnboarding && (
-          <OnboardingTour onComplete={handleOnboardingComplete} />
-        )}
-
-        {notice && !showOnboarding && (
-          <AnnouncementModal notice={notice} onDismiss={handleNoticeDismiss} />
-        )}
-
+        {showOnboarding && <OnboardingTour onComplete={() => setShowOnboarding(false)} />}
+        {notice && !showOnboarding && <AnnouncementModal notice={notice} onDismiss={handleNoticeDismiss} />}
       </div>
+      {toastView}
     </>
   );
 }

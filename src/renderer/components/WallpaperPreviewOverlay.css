@@ -1,0 +1,251 @@
+.wallpaper-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.wallpaper-preview-overlay .preview-wallpaper-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.wallpaper-preview-overlay .preview-wallpaper-image.fit-cover {
+  object-fit: cover;
+}
+
+.wallpaper-preview-overlay .preview-wallpaper-image.fit-contain {
+  object-fit: contain;
+}
+
+.wallpaper-preview-overlay .preview-toolbar {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 16px;
+  max-width: calc(100vw - 40px);
+  border-radius: 999px;
+  background: rgba(15, 15, 22, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(var(--primary-rgb, 255, 0, 180), 0.35);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  color: #ffffff;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.wallpaper-preview-overlay .preview-toolbar.visible,
+.wallpaper-preview-overlay .preview-toolbar:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+
+.wallpaper-preview-overlay .preview-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: nowrap;
+}
+
+.wallpaper-preview-overlay .preview-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(var(--primary-rgb, 255, 0, 180), 0.2);
+  border: 1px solid rgba(var(--primary-rgb, 255, 0, 180), 0.4);
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.wallpaper-preview-overlay .preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wallpaper-preview-overlay .preview-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.wallpaper-preview-overlay .preview-action-btn.icon-only {
+  width: 32px;
+  padding: 0;
+}
+
+.wallpaper-preview-overlay .preview-action-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.wallpaper-preview-overlay .preview-action-btn.active,
+.wallpaper-preview-overlay .preview-action-btn.exit-btn:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #ffffff;
+}
+
+.wallpaper-preview-overlay .preview-desktop-mock {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+.wallpaper-preview-overlay .mock-desktop-icons {
+  position: absolute;
+  top: 20px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wallpaper-preview-overlay .mock-desktop-icon {
+  width: 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.wallpaper-preview-overlay .mock-icon-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.45));
+}
+
+.wallpaper-preview-overlay .mock-icon-label {
+  font-family: 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+  font-size: 12px;
+  line-height: 1.25;
+  color: #ffffff;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.92), 0 0 2px rgba(0, 0, 0, 0.95);
+}
+
+.wallpaper-preview-overlay .mock-taskbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(28, 30, 36, 0.78);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.wallpaper-preview-overlay .mock-taskbar-center {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wallpaper-preview-overlay .mock-taskbar-item {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wallpaper-preview-overlay .mock-taskbar-item img,
+.wallpaper-preview-overlay .mock-taskbar-item svg {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.wallpaper-preview-overlay .mock-taskbar-item.active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.wallpaper-preview-overlay .mock-taskbar-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  width: 14px;
+  height: 3px;
+  border-radius: 999px;
+  background: #60cdff;
+}
+
+.wallpaper-preview-overlay .mock-taskbar-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 150px;
+  height: 30px;
+  padding: 0 12px;
+  margin: 0 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+  font-size: 12px;
+}
+
+.wallpaper-preview-overlay .mock-taskbar-right {
+  position: absolute;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+}
+
+.wallpaper-preview-overlay .mock-tray-ime {
+  font-size: 12px;
+}
+
+.wallpaper-preview-overlay .mock-tray-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wallpaper-preview-overlay .mock-taskbar-tray {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 11px;
+  line-height: 1.25;
+}

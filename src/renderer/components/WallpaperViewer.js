@@ -1,214 +1,178 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import './WallpaperViewer.css';
+import useWallpaperImages from '../hooks/useWallpaperImages.js';
+import WallpaperImage from './WallpaperImage.js';
+import Toast from './Toast.js';
+import WallpaperEditorModal from './WallpaperEditorModal.js';
+import WallpaperPreviewOverlay from './WallpaperPreviewOverlay.js';
+import { DEFAULT_THEME_COLOR, PRESET_THEME_COLORS } from '../utils/themeColor.js';
 
-const { ipcRenderer } = window.require('electron');
+const api = window.wallpaperAPI;
+const isInteractiveTarget = target => !!target?.closest?.(
+  'input, textarea, select, button, [contenteditable]:not([contenteditable="false"]), [role="dialog"], .app-toast'
+);
 
-const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart, handleAutoStartChange }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [displayWallpapers, setDisplayWallpapers] = useState([]);
-  const [imageCache, setImageCache] = useState({});
-  const [loadingImages, setLoadingImages] = useState({});
+const WallpaperViewer = ({
+  wallpapers, showSettings, setShowSettings, autoStart, handleAutoStartChange,
+  closeBehavior = 'tray', handleCloseBehaviorChange,
+  themeColor = DEFAULT_THEME_COLOR, handleThemeColorChange,
+  isPreviewFullscreen = false, onEnterPreview, onExitPreview,
+  onCacheCleared, onNotify, interactionBlocked = false
+}) => {
+  const [selectedIndex, setCurrentIndex] = useState(0);
+  const displayWallpapers = useMemo(() => wallpapers.slice(0, 8), [wallpapers]);
+  const currentIndex = Math.min(selectedIndex, Math.max(0, displayWallpapers.length - 1));
+  const { imageCache, preloadImages, retryLoadImage, markImageLoaded, markImageError } = useWallpaperImages(wallpapers);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [animationClass, setAnimationClass] = useState('');
-  const [isNewImage, setIsNewImage] = useState(false);
-  const [slideDirection, setSlideDirection] = useState('');
+  const isNewImage = false;
+  const [, setSlideDirection] = useState('');
   const [animatingItems, setAnimatingItems] = useState({});
   const [isSettingWallpaper, setIsSettingWallpaper] = useState(false);
-  const [wallpaperStatus, setWallpaperStatus] = useState('');
+  const [toast, setToast] = useState(null);
+  const toastIdRef = useRef(0);
+  const viewerRef = useRef(null);
+  const [showEditor, setShowEditor] = useState(false);
+  const [localPreview, setLocalPreview] = useState(false);
+  const [editedPreviewUrl, setEditedPreviewUrl] = useState(null);
+  const previewActive = onEnterPreview ? isPreviewFullscreen : localPreview;
+  const interactionsBlocked = showSettings || showEditor || previewActive || interactionBlocked;
   const [autoSetWallpaper, setAutoSetWallpaper] = useState(false);
-  const [lastAutoSetIndex, setLastAutoSetIndex] = useState(-1);
-  const [updateStatus, setUpdateStatus] = useState('');
+  const [lastAutoSetId, setLastAutoSetId] = useState(null);
+  const settingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const timersRef = useRef(new Set());
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [cacheStatus, setCacheStatus] = useState('');
   const [isClearingCache, setIsClearingCache] = useState(false);
   
-  // 防抖计时器ref
-  const debounceTimerRef = useRef(null);
-  
-  // 跟踪正在加载的图片ID，防止重复加载
-  const loadingSetRef = useRef(new Set());
+  const schedule = useCallback((callback, delay) => {
+    if (!mountedRef.current) return null;
+    const timer = setTimeout(() => {
+      timersRef.current.delete(timer);
+      if (mountedRef.current) callback();
+    }, delay);
+    timersRef.current.add(timer);
+    return timer;
+  }, []);
 
-  // 优化的图片预加载函数 - 支持渐进式加载和网络优化
-  const preloadSingleImage = useCallback((wallpaper, retryCount = 0, priority = 'low') => {
-    const maxRetries = 3; // 增加重试次数
-    
-    // 检查图片是否已经在缓存中或正在加载
-    if (imageCache[wallpaper.id] || loadingImages[wallpaper.id] || loadingSetRef.current.has(wallpaper.id)) {
-      console.log(`Image already cached or loading: ${wallpaper.id}`);
-      return Promise.resolve(imageCache[wallpaper.id]);
-    }
-    
-    return new Promise((resolve, reject) => {
-      // 添加到加载集合中
-      loadingSetRef.current.add(wallpaper.id);
-      
-      // 设置加载状态
-      setLoadingImages(prev => ({
-        ...prev,
-        [wallpaper.id]: true
-      }));
-      
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.decoding = 'async';
-      
-      // 网络优化：根据优先级设置不同的加载策略
-      if (priority === 'high') {
-        img.loading = 'eager';
-        img.fetchPriority = 'high';
-      } else {
-        img.loading = 'lazy';
-        img.fetchPriority = 'low';
-      }
-      
-      // 处理加载错误和重试
-      const handleImageError = () => {
-        setLoadingImages(prev => ({
-          ...prev,
-          [wallpaper.id]: false
-        }));
-        
-        if (retryCount < maxRetries) {
-          console.log(`Retrying image load for ${wallpaper.id} (${retryCount + 1}/${maxRetries + 1})`);
-          loadingSetRef.current.delete(wallpaper.id);
-          
-          // 递增延迟重试，减少服务器压力
-          const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 8000);
-          setTimeout(() => {
-            preloadSingleImage(wallpaper, retryCount + 1, priority).then(resolve).catch(reject);
-          }, retryDelay);
-        } else {
-          console.error(`Failed to load image after ${maxRetries + 1} attempts: ${wallpaper.id}`);
-          loadingSetRef.current.delete(wallpaper.id);
-          setImageCache(prev => ({
-            ...prev,
-            [wallpaper.id]: 'error'
-          }));
-          reject(new Error(`Failed to load image: ${wallpaper.id}`));
-        }
-      };
-      
-      // 优化的超时处理 - 根据重试次数调整超时时间
-      const timeoutDuration = Math.min(15000 + (retryCount * 5000), 30000);
-      const timeoutId = setTimeout(() => {
-        console.log(`Image load timeout for ${wallpaper.id}, attempt ${retryCount + 1}`);
-        img.onload = null;
-        img.onerror = null;
-        img.src = '';
-        handleImageError();
-      }, timeoutDuration);
-      
-      img.onload = () => {
-        clearTimeout(timeoutId);
-        console.log(`Image loaded successfully: ${wallpaper.id} (attempt ${retryCount + 1})`);
-        
-        loadingSetRef.current.delete(wallpaper.id);
-        
-        setImageCache(prev => ({
-          ...prev,
-          [wallpaper.id]: img.src
-        }));
-        setLoadingImages(prev => ({
-          ...prev,
-          [wallpaper.id]: false
-        }));
-        
-        resolve(img.src);
-      };
-      
-      img.onerror = () => {
-        clearTimeout(timeoutId);
-        console.log(`Image load error for ${wallpaper.id}, attempt ${retryCount + 1}`);
-        handleImageError();
-      };
-      
-      // 开始加载图片
-      img.src = wallpaper.imageUrl;
-    });
-  }, [imageCache, loadingImages]);
+  const cancelTimer = useCallback(timer => {
+    clearTimeout(timer);
+    timersRef.current.delete(timer);
+  }, []);
 
-  // 预加载图片
-  const preloadImages = useCallback((wallpaperList) => {
-    wallpaperList.forEach((wallpaper, index) => {
-      // 只预加载没有在缓存中的图片
-      if (!imageCache[wallpaper.id] && !loadingImages[wallpaper.id]) {
-        preloadSingleImage(wallpaper).catch((error) => {
-          console.warn(`Preload failed for image ${wallpaper.id}:`, error.message);
-          // 错误已经在preloadSingleImage中处理，这里只是防止未捕获的Promise拒绝
-        });
-      }
-    });
-  }, [imageCache, loadingImages, preloadSingleImage]);
+  useEffect(() => {
+    mountedRef.current = true;
+    const timers = timersRef.current;
+    return () => {
+      mountedRef.current = false;
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
 
-  // 设置壁纸
-  const handleSetWallpaper = async (wallpaper, isAuto = false) => {
-    // 如果没有传入wallpaper参数，使用当前显示的壁纸
-    console.log(displayWallpapers.length)
-    if (!wallpaper.id && displayWallpapers.length > 0) {
-      wallpaper = displayWallpapers[currentIndex];
-    }
-    if (!wallpaper) return;
-    if (isSettingWallpaper && !isAuto) return; // 防止重复点击（自动模式除外）
+  const notify = useCallback(options => {
+    if (!mountedRef.current) return null;
+    if (typeof onNotify === 'function') return onNotify(options);
+    const id = options?.id ?? ++toastIdRef.current;
+    setToast({ ...options, id });
+    return id;
+  }, [onNotify]);
+  const dismissToast = useCallback(id => {
+    setToast(previous => previous?.id === id ? null : previous);
+  }, []);
+
+  // 提示绑定操作开始时的壁纸，而不是异步完成时正在浏览的图片。
+  const handleSetWallpaper = useCallback(async (wallpaper, isAuto = false) => {
+    if (!wallpaper || settingRef.current) return;
+    settingRef.current = true;
     setIsSettingWallpaper(true);
-    setWallpaperStatus(isAuto ? '自动设置壁纸...' : '正在设置壁纸...');
-
-    // Debug logging to diagnose URL issues
-    console.log('handleSetWallpaper called with wallpaper:', {
-      id: wallpaper.id,
-      imageUrl: wallpaper.imageUrl,
-      artist: wallpaper.artist,
-      source: wallpaper.source,
-      originalUrl: wallpaper.originalUrl
-    });
-
+    const description = `壁纸 ${wallpaper.id}${wallpaper.artist ? ` · ${wallpaper.artist}` : ''}`;
+    const toastId = notify({ type: 'loading', title: isAuto ? '正在自动设置壁纸' : '正在设置壁纸', description, duration: 0 });
+    if (isAuto) setLastAutoSetId(wallpaper.id);
     try {
-      // 只传递可序列化的wallpaper属性，包括originalUrl如果存在
-      const wallpaperData = {
-        id: wallpaper.id,
-        imageUrl: wallpaper.imageUrl,
-        originalUrl: wallpaper.originalUrl, // Add originalUrl to the data
-        artist: wallpaper.artist,
-        source: wallpaper.source
-      };
-      
-      console.log('Sending wallpaper data to main process:', wallpaperData);
-      const result = await ipcRenderer.invoke('set-wallpaper', wallpaperData);
-      if (result.success) {
-        setWallpaperStatus(isAuto ? '自动设置成功！' : '壁纸设置成功！');
-        if (isAuto) {
-          setLastAutoSetIndex(currentIndex);
-        }
-        // 自动清除成功状态
-        setTimeout(() => {
-          setWallpaperStatus('');
-        }, isAuto ? 2000 : 3000);
-      } else {
-        setWallpaperStatus(`设置失败: ${result.error}`);
-      }
+      const result = await api.setWallpaper(wallpaper.id);
+      if (!mountedRef.current) return;
+      if (!result.success) throw new Error(result.error || '设置失败');
+      notify({ id: toastId, type: 'success', title: isAuto ? '自动设置壁纸成功' : '壁纸设置成功', description });
     } catch (error) {
-      console.error('Error setting wallpaper:', error);
-      setWallpaperStatus(`错误: ${error.message}`);
+      if (!mountedRef.current) return;
+      if (isAuto) setAutoSetWallpaper(false);
+      notify({
+        id: toastId, type: 'error', title: isAuto ? '自动设置失败，已暂停' : '壁纸设置失败',
+        description: `${description}
+${error.message}`, duration: 6000
+      });
     } finally {
-      setIsSettingWallpaper(false);
+      settingRef.current = false;
+      if (mountedRef.current) setIsSettingWallpaper(false);
     }
-  };
+  }, [notify]);
+
+  const openPreview = useCallback(() => {
+    if (onEnterPreview) onEnterPreview();
+    else setLocalPreview(true);
+  }, [onEnterPreview]);
+
+  const closePreview = useCallback(() => {
+    setEditedPreviewUrl(null);
+    if (onExitPreview) onExitPreview();
+    else setLocalPreview(false);
+  }, [onExitPreview]);
+
+  const handlePreviewEdited = useCallback(dataUrl => {
+    setEditedPreviewUrl(dataUrl);
+    openPreview();
+  }, [openPreview]);
+
+  const handleApplyEditedWallpaper = useCallback(async payload => {
+    const wallpaper = displayWallpapers[currentIndex];
+    if (!wallpaper || settingRef.current) return;
+    settingRef.current = true;
+    setIsSettingWallpaper(true);
+    const description = `编辑版壁纸 ${wallpaper.id}`;
+    const toastId = notify({ type: 'loading', title: '正在应用编辑壁纸', description, duration: 0 });
+    try {
+      const result = await api.setEditedWallpaper(payload, wallpaper.id);
+      if (!mountedRef.current) return;
+      if (!result?.success) throw new Error(result?.error || '设置失败');
+      notify({ id: toastId, type: 'success', title: '编辑壁纸设置成功', description });
+      setShowEditor(false);
+    } catch (error) {
+      if (!mountedRef.current) return;
+      notify({ id: toastId, type: 'error', title: '编辑壁纸设置失败', description: `${description}\n${error.message}`, duration: 6000 });
+    } finally {
+      settingRef.current = false;
+      if (mountedRef.current) setIsSettingWallpaper(false);
+    }
+  }, [displayWallpapers, currentIndex, notify]);
+
+  const handleSaveEditedWallpaper = useCallback(async payload => {
+    try {
+      const result = await api.saveEditedWallpaper(payload);
+      if (!mountedRef.current || result?.cancelled) return;
+      if (!result?.success) throw new Error(result?.error || '保存失败');
+      notify({ type: 'success', title: '壁纸已另存为', description: result.filePath || '' });
+    } catch (error) {
+      if (!mountedRef.current) return;
+      notify({ type: 'error', title: '保存编辑壁纸失败', description: error.message, duration: 6000 });
+    }
+  }, [notify]);
 
   // 清除缓存功能
   const handleClearCache = async () => {
     if (isClearingCache) return;
     
     setIsClearingCache(true);
+    setAutoSetWallpaper(false);
+    setLastAutoSetId(null);
     setCacheStatus('正在清除缓存...');
     
     try {
-      const result = await ipcRenderer.invoke('clear-cache');
+      const result = await api.clearCache();
       
       if (result.success) {
         setCacheStatus(`缓存清除成功！删除了 ${result.clearedCount} 个文件`);
-        // 清除成功后，重新加载壁纸数据
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        onCacheCleared();
       } else {
         setCacheStatus(`清除缓存失败：${result.error}`);
       }
@@ -218,7 +182,7 @@ const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart,
     } finally {
       setIsClearingCache(false);
       // 5秒后清除状态
-      setTimeout(() => {
+      schedule(() => {
         setCacheStatus('');
       }, 5000);
     }
@@ -227,107 +191,82 @@ const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart,
   // 检查更新功能
   const handleCheckUpdate = async () => {
     if (isCheckingUpdate) return;
-    
     setIsCheckingUpdate(true);
-    setUpdateStatus('正在检查更新...');
-    
+    const toastId = notify({ type: 'loading', title: '正在检查更新', duration: 0 });
     try {
-      const result = await ipcRenderer.invoke('check-update');
-      
+      const result = await api.checkUpdate();
+      if (!mountedRef.current) return;
       if (result.success) {
         if (result.hasUpdate) {
-          setUpdateStatus(`发现新版本 ${result.latestVersion}！当前版本：${result.currentVersion}`);
-          // 可以在这里添加打开下载链接的逻辑
-          setTimeout(() => {
-            window.open(result.updateUrl, '_blank');
+          notify({
+            id: toastId,
+            type: 'info',
+            title: `发现新版本 ${result.latestVersion}`,
+            description: `当前版本 ${result.currentVersion}，即将打开下载链接`,
+            duration: 5000
+          });
+          schedule(() => {
+            api.openExternal(result.updateUrl).catch(console.error);
           }, 2000);
         } else {
-          setUpdateStatus('已是最新版本');
+          notify({ id: toastId, type: 'success', title: '已是最新版本', duration: 3000 });
         }
       } else {
-        setUpdateStatus(`检查更新失败：${result.error}`);
+        notify({ id: toastId, type: 'error', title: '检查更新失败', description: result.error || '请稍后重试', duration: 5000 });
       }
     } catch (error) {
       console.error('Error checking for updates:', error);
-      setUpdateStatus('检查更新时发生错误');
-    } finally {
-      setIsCheckingUpdate(false);
-      // 3秒后清除状态
-      setTimeout(() => {
-        setUpdateStatus('');
-      }, 3000);
-    }
-  };
-
-  // 自动设置壁纸功能
-  useEffect(() => {
-    if (autoSetWallpaper && currentIndex !== lastAutoSetIndex && displayWallpapers.length > 0 && !isSettingWallpaper) {
-      // 延迟1秒后自动设置壁纸，确保图片切换动画完成
-      const timer = setTimeout(() => {
-        const currentWallpaper = displayWallpapers[currentIndex];
-        if (currentWallpaper && imageCache[currentWallpaper.id] !== 'error') {
-          console.log(`Auto setting wallpaper: ${currentWallpaper.id}`);
-          handleSetWallpaper(currentWallpaper, true);
-        }
-      }, 1000);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [currentIndex, autoSetWallpaper, lastAutoSetIndex, displayWallpapers, imageCache, isSettingWallpaper, handleSetWallpaper]);
-
-  // 切换自动设置壁纸模式
-  const toggleAutoSetWallpaper = () => {
-    setAutoSetWallpaper(!autoSetWallpaper);
-    if (!autoSetWallpaper) {
-      setWallpaperStatus('已开启自动设置壁纸');
-      // 立即设置当前壁纸
-      if (displayWallpapers.length > 0) {
-        const currentWallpaper = displayWallpapers[currentIndex];
-        if (currentWallpaper && imageCache[currentWallpaper.id] !== 'error') {
-          handleSetWallpaper(currentWallpaper, true);
-        }
+      if (mountedRef.current) {
+        notify({ id: toastId, type: 'error', title: '检查更新失败', description: error.message || '检查更新时发生错误', duration: 5000 });
       }
-    } else {
-      setWallpaperStatus('已关闭自动设置壁纸');
-      setLastAutoSetIndex(-1);
+    } finally {
+      if (mountedRef.current) setIsCheckingUpdate(false);
     }
-    setTimeout(() => {
-      setWallpaperStatus('');
-    }, 2000);
   };
 
-  // 获取用于显示的前8张壁纸
+  // 按壁纸 ID 记录尝试；切换失败不会无限触发相同操作。
   useEffect(() => {
-    if (wallpapers && wallpapers.length > 0) {
-      const displayItems = wallpapers.slice(0, 8);
-      setDisplayWallpapers(displayItems);
-      
-      // 预加载所有15张图片
-      preloadImages(wallpapers);
-    }
-  }, [wallpapers, preloadImages]);
+    const wallpaper = displayWallpapers[currentIndex];
+    if (interactionsBlocked || !autoSetWallpaper || !wallpaper || wallpaper.id === lastAutoSetId || isSettingWallpaper || isClearingCache) return;
+    const timer = schedule(() => {
+      if (imageCache[wallpaper.id] !== 'error') handleSetWallpaper(wallpaper, true);
+    }, 1000);
+    return () => cancelTimer(timer);
+  }, [currentIndex, autoSetWallpaper, lastAutoSetId, displayWallpapers, imageCache, isSettingWallpaper, isClearingCache, handleSetWallpaper, schedule, cancelTimer, interactionsBlocked]);
 
-  // 重试加载单张图片
-  const retryLoadImage = (wallpaper) => {
-    // 清除错误状态
-    setImageCache(prev => {
-      const newCache = { ...prev };
-      delete newCache[wallpaper.id];
-      return newCache;
-    });
-    
-    // 重新加载图片
-    preloadSingleImage(wallpaper, 0, 'high');
+  const toggleAutoSetWallpaper = () => {
+    setAutoSetWallpaper(previous => !previous);
+    setLastAutoSetId(null);
+    notify({ type: 'info', title: autoSetWallpaper ? '已关闭自动壁纸' : '已开启自动壁纸', duration: 2500 });
   };
+
+  useEffect(() => {
+    setCurrentIndex(previous => Math.min(previous, Math.max(0, displayWallpapers.length - 1)));
+  }, [displayWallpapers.length]);
+
+  useEffect(() => {
+    if (typeof api.onTraySelectWallpaper !== 'function') return undefined;
+    return api.onTraySelectWallpaper(wallpaperId => {
+      const targetIdx = displayWallpapers.findIndex(item => item.id === wallpaperId);
+      if (targetIdx !== -1) setCurrentIndex(targetIdx);
+    });
+  }, [displayWallpapers]);
+
+  useEffect(() => {
+    if (!displayWallpapers.length) return;
+    const length = displayWallpapers.length;
+    preloadImages([
+      displayWallpapers[currentIndex],
+      displayWallpapers[(currentIndex + 1) % length],
+      displayWallpapers[(currentIndex + length - 1) % length]
+    ].filter(Boolean));
+  }, [displayWallpapers, currentIndex, preloadImages]);
 
   // 优化的横向滚动切换函数 - 缩短滑动路径和时间
   const handlePrevious = useCallback(() => {
-    if (isTransitioning) return;
+    if (interactionsBlocked || isTransitioning || displayWallpapers.length < 2) return;
     setIsTransitioning(true);
     setSlideDirection('right'); // 向右滑动显示上一张
-    
-    // 切换图片时清除壁纸状态
-    setWallpaperStatus('');
     
     const prevIdx = currentIndex === 0 ? displayWallpapers.length - 1 : currentIndex - 1;
     const nextIdx = (currentIndex + 1) % displayWallpapers.length;
@@ -340,26 +279,23 @@ const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart,
     });
     
     // 缩短延迟时间
-    setTimeout(() => {
+    schedule(() => {
       setCurrentIndex(prevIdx);
     }, 25);
     
     // 总动画时间28ms
-    setTimeout(() => {
+    schedule(() => {
       setIsTransitioning(false);
       setSlideDirection('');
       setAnimatingItems({});
     }, 280);
-  }, [displayWallpapers.length, isTransitioning, currentIndex]);
+  }, [displayWallpapers.length, isTransitioning, currentIndex, schedule, interactionsBlocked]);
 
   // 优化的横向滚动切换函数 - 缩短滑动路径和时间
   const handleNext = useCallback(() => {
-    if (isTransitioning) return;
+    if (interactionsBlocked || isTransitioning || displayWallpapers.length < 2) return;
     setIsTransitioning(true);
     setSlideDirection('left'); // 向左滑动显示下一张
-    
-    // 切换图片时清除壁纸状态
-    setWallpaperStatus('');
     
     const prevIdx = currentIndex === 0 ? displayWallpapers.length - 1 : currentIndex - 1;
     const nextIdx = (currentIndex + 1) % displayWallpapers.length;
@@ -372,32 +308,29 @@ const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart,
     });
     
     // 缩短延迟时间
-    setTimeout(() => {
+    schedule(() => {
       setCurrentIndex(nextIdx);
     }, 25);
     
     // 缩短总动画时间从450ms到280ms
-    setTimeout(() => {
+    schedule(() => {
       setIsTransitioning(false);
       setSlideDirection('');
       setAnimatingItems({});
     }, 280);
-  }, [displayWallpapers.length, isTransitioning, currentIndex]);
+  }, [displayWallpapers.length, isTransitioning, currentIndex, schedule, interactionsBlocked]);
 
   // 优化的直接跳转函数 - 使用快速淡入淡出效果
   const handleIndicatorClick = useCallback((index) => {
-    if (isTransitioning || index === currentIndex) return;
+    if (interactionsBlocked || isTransitioning || index === currentIndex) return;
     setIsTransitioning(true);
-    
-    // 切换图片时清除壁纸状态
-    setWallpaperStatus('');
     
     // 使用快速淡入淡出效果，避免复杂滑动
     setAnimatingItems({
       [currentIndex]: 'fast-fade-out'
     });
     
-    setTimeout(() => {
+    schedule(() => {
       setCurrentIndex(index);
       
       // 设置新图片的快速淡入动画
@@ -407,66 +340,55 @@ const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart,
     }, 100);
     
     // 缩短总动画时间到200ms
-    setTimeout(() => {
+    schedule(() => {
       setIsTransitioning(false);
       setSlideDirection('');
       setAnimatingItems({});
     }, 200);
-  }, [currentIndex, isTransitioning]);
+  }, [currentIndex, isTransitioning, schedule, interactionsBlocked]);
 
-  // 键盘事件处理
   useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (e.key === 'ArrowLeft') {
+    if (interactionsBlocked) return;
+    const handleKeyPress = event => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || isInteractiveTarget(event.target)) return;
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
         handlePrevious();
-      } else if (e.key === 'ArrowRight') {
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
         handleNext();
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [handlePrevious, handleNext]);
+  }, [handlePrevious, handleNext, interactionsBlocked]);
 
-  // 优化鼠标滚轮事件处理 - 降低延迟，提升响应速度
   useEffect(() => {
-    const WHEEL_THRESHOLD = 50; // 降低滚轮阈值，提升响应速度
+    const viewer = viewerRef.current;
+    if (!viewer || interactionsBlocked) return;
     let wheelTimeout = null;
-    
-    const handleWheel = (e) => {
-      e.preventDefault();
-      
-      // 清除之前的超时
-      if (wheelTimeout) {
-        clearTimeout(wheelTimeout);
-      }
-      
-      // 降低防抖延迟，提升响应速度
-      wheelTimeout = setTimeout(() => {
-        if (Math.abs(e.deltaY) > WHEEL_THRESHOLD && !isTransitioning) {
-          if (e.deltaY > 0) {
-            handleNext();
-          } else if (e.deltaY < 0) {
-            handlePrevious();
-          }
-        }
-      }, 50); // 从无延迟改为50ms小延迟，避免过于敏感
+    const handleWheel = event => {
+      if (event.defaultPrevented || isInteractiveTarget(event.target) || Math.abs(event.deltaY) <= 50) return;
+      event.preventDefault();
+      cancelTimer(wheelTimeout);
+      const direction = event.deltaY;
+      wheelTimeout = schedule(() => {
+        if (direction > 0) handleNext();
+        else handlePrevious();
+      }, 50);
     };
+    viewer.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      cancelTimer(wheelTimeout);
+      viewer.removeEventListener('wheel', handleWheel);
+    };
+  }, [handlePrevious, handleNext, interactionsBlocked, schedule, cancelTimer]);
 
-    const viewer = document.querySelector('.wallpaper-viewer');
-    if (viewer) {
-      viewer.addEventListener('wheel', handleWheel, { passive: false });
-      return () => {
-        if (wheelTimeout) {
-          clearTimeout(wheelTimeout);
-        }
-        viewer.removeEventListener('wheel', handleWheel);
-      };
-    }
-  }, [handlePrevious, handleNext, isTransitioning]);
-
+  const toastView = typeof onNotify === 'function'
+    ? null
+    : <Toast key={toast?.id ?? 'empty'} toast={toast} onDismiss={dismissToast} />;
   if (!displayWallpapers.length) {
-    return <div className="no-wallpapers">暂无壁纸数据</div>;
+    return <><div className="no-wallpapers">暂无壁纸数据</div>{toastView}</>;
   }
 
   const currentWallpaper = displayWallpapers[currentIndex];
@@ -476,215 +398,143 @@ const WallpaperViewer = ({ wallpapers, showSettings, setShowSettings, autoStart,
   const nextWallpaper = displayWallpapers[nextIndex];
 
   return (
-    <div className="wallpaper-viewer">
+    <>
+    <div className="wallpaper-viewer" ref={viewerRef}>
       <div className={`wallpaper-container ${isTransitioning ? 'transitioning' : ''}`}>
         {/* 3D轮播容器 */}
         <div className="carousel-3d-container">
-          {/* 上一张图片 (右半部分可见) */}
-          <div className={`carousel-item carousel-prev ${animatingItems[prevIndex] || ''}`} onClick={handlePrevious}>
-            {imageCache[prevWallpaper.id] === 'error' ? (
-              <div className="image-error-placeholder">
-                <div className="error-square">
-                  <div className="error-icon">🖼️</div>
-                  <div className="error-text">加载失败</div>
-                  <button 
-                    className="retry-button-small" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      retryLoadImage(prevWallpaper);
-                    }}
-                    title="重试加载"
-                  >
-                    🔄
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <img 
-                src={prevWallpaper.imageUrl} 
-                alt={`壁纸 by ${prevWallpaper.artist}`}
-                className="carousel-image"
-                onLoad={(e) => {
-                  setLoadingImages(prev => ({
-                    ...prev,
-                    [prevWallpaper.id]: false
-                  }));
-                }}
-                onError={(e) => {
-                  console.error(`Failed to load image: ${prevWallpaper.id}`);
-                  setImageCache(prev => ({
-                    ...prev,
-                    [prevWallpaper.id]: 'error'
-                  }));
-                  setLoadingImages(prev => ({
-                    ...prev,
-                    [prevWallpaper.id]: false
-                  }));
-                }}
-style={{ 
-                  objectFit: 'cover',
-                  width: '100%',
-                  height: '100%',
-                  maxWidth: '100%',
-                  maxHeight: '100%'
-                }}
+          {displayWallpapers.length > 1 && (
+            <button
+              type="button"
+              className={`nav-button nav-button-left${isTransitioning ? ' disabled' : ''}`}
+              onClick={handlePrevious}
+              disabled={isTransitioning}
+              aria-label="上一张壁纸"
+              title="上一张"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          )}
+          {displayWallpapers.length > 1 && (
+            <div className={`carousel-item carousel-prev ${animatingItems[prevIndex] || ''}`} onClick={handlePrevious}>
+              <WallpaperImage
+                wallpaper={prevWallpaper}
+                error={imageCache[prevWallpaper.id] === 'error'}
+                onLoad={markImageLoaded}
+                onError={markImageError}
+                onRetry={retryLoadImage}
               />
-            )}
-            {loadingImages[prevWallpaper.id] && (
-              <div className="loading-indicator">
-                <div className="spinner"></div>
-                <div>加载中...</div>
-              </div>
-            )}
-          </div>
-
-          {/* 当前图片 (完全可见) */}
+            </div>
+          )}
           <div className={`carousel-item carousel-current ${isNewImage ? 'new-image' : ''} ${animatingItems[currentIndex] || ''}`}>
-            {imageCache[currentWallpaper.id] === 'error' ? (
-              <div className="image-error-placeholder">
-                <div className="error-square">
-                  <div className="error-icon">🖼️</div>
-                  <div className="error-text">加载失败</div>
-                  <button 
-                    className="retry-button-small" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      retryLoadImage(currentWallpaper);
-                    }}
-                    title="重试加载"
-                  >
-                    🔄
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <img 
-                src={currentWallpaper.imageUrl} 
-                alt={`壁纸 by ${currentWallpaper.artist}`}
-                className="carousel-image"
-                onLoad={(e) => {
-                  setLoadingImages(prev => ({
-                    ...prev,
-                    [currentWallpaper.id]: false
-                  }));
-                }}
-                onError={(e) => {
-                  console.error(`Failed to load image: ${currentWallpaper.id}`);
-                  setImageCache(prev => ({
-                    ...prev,
-                    [currentWallpaper.id]: 'error'
-                  }));
-                  setLoadingImages(prev => ({
-                    ...prev,
-                    [currentWallpaper.id]: false
-                  }));
-                }}
-                style={{ 
-                  objectFit: 'cover',
-                  width: '100%',
-                  height: '100%',
-                  maxWidth: '100%',
-                  maxHeight: '100%'
-                }}
-              />
-            )}
-            {loadingImages[currentWallpaper.id] && (
-              <div className="loading-indicator">
-                加载中...
-              </div>
-            )}
+            <WallpaperImage
+              wallpaper={currentWallpaper}
+              error={imageCache[currentWallpaper.id] === 'error'}
+              onLoad={markImageLoaded}
+              onError={markImageError}
+              onRetry={retryLoadImage}
+            />
+            <div className="current-card-actions" onClick={event => event.stopPropagation()}>
+              <button
+                type="button"
+                className="card-action-btn edit-wallpaper-button"
+                onClick={() => setShowEditor(true)}
+                disabled={isSettingWallpaper}
+                title="编辑壁纸"
+                aria-label="编辑壁纸"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 20H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M16.5 3.5A2.121 2.121 0 1 1 19.5 6.5L7 19L3 20L4 16L16.5 3.5Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span>编辑</span>
+              </button>
+              <button
+                type="button"
+                className="card-action-btn preview-wallpaper-button"
+                onClick={openPreview}
+                title="全屏预览壁纸效果"
+                aria-label="全屏预览壁纸效果"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                  <path d="M15 3H21V9M9 21H3V15M21 3L14 10M3 21L10 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span>预览</span>
+              </button>
+            </div>
           </div>
-
-          {/* 下一张图片 (左半部分可见) */}
-          <div className={`carousel-item carousel-next ${animatingItems[nextIndex] || ''}`} onClick={handleNext}>
-            {imageCache[nextWallpaper.id] === 'error' ? (
-              <div className="image-error-placeholder">
-                <div className="error-square">
-                  <div className="error-icon">🖼️</div>
-                  <div className="error-text">加载失败</div>
-                  <button 
-                    className="retry-button-small" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      retryLoadImage(nextWallpaper);
-                    }}
-                    title="重试加载"
-                  >
-                    🔄
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <img 
-                src={nextWallpaper.imageUrl} 
-                alt={`壁纸 by ${nextWallpaper.artist}`}
-                className="carousel-image"
-                onLoad={(e) => {
-                  setLoadingImages(prev => ({
-                    ...prev,
-                    [nextWallpaper.id]: false
-                  }));
-                }}
-                onError={(e) => {
-                  console.error(`Failed to load image: ${nextWallpaper.id}`);
-                  setImageCache(prev => ({
-                    ...prev,
-                    [nextWallpaper.id]: 'error'
-                  }));
-                  setLoadingImages(prev => ({
-                    ...prev,
-                    [nextWallpaper.id]: false
-                  }));
-                }}
-                style={{ 
-                  objectFit: 'cover',
-                  width: '100%',
-                  height: '100%',
-                  maxWidth: '100%',
-                  maxHeight: '100%'
-                }}
+          {displayWallpapers.length > 1 && (
+            <div className={`carousel-item carousel-next ${animatingItems[nextIndex] || ''}`} onClick={handleNext}>
+              <WallpaperImage
+                wallpaper={nextWallpaper}
+                error={imageCache[nextWallpaper.id] === 'error'}
+                onLoad={markImageLoaded}
+                onError={markImageError}
+                onRetry={retryLoadImage}
               />
-            )}
-            {loadingImages[nextWallpaper.id] && (
-              <div className="loading-indicator">
-                加载中...
-              </div>
-            )}
-          </div>
+            </div>
+          )}
+          {displayWallpapers.length > 1 && (
+            <button
+              type="button"
+              className={`nav-button nav-button-right${isTransitioning ? ' disabled' : ''}`}
+              onClick={handleNext}
+              disabled={isTransitioning}
+              aria-label="下一张壁纸"
+              title="下一张"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 壁纸信息 */}
-      <div className="wallpaper-info">
-        <div className="info-item">
-          <span className="info-label">ID:</span>
-          <span className="info-value">{currentWallpaper.id}</span>
-        </div>
-        <div className="info-item">
-          <span className="info-label">画师:</span>
-          <span className="info-value">{currentWallpaper.artist}</span>
-        </div>
-        <div className="info-item">
-          <span className="info-label">来源:</span>
-          <span className="info-value">{currentWallpaper.source}</span>
-        </div>
-        {/* 状态显示 */}
-        {wallpaperStatus && (
-          <div className="info-item status-item">
-            <span className="status-text">{wallpaperStatus}</span>
+      <div className="viewer-bottom-bar">
+        {/* 壁纸信息 */}
+        <div className="wallpaper-info">
+          <div className="info-item">
+            <span className="info-label">ID:</span>
+            <span className="info-value">{currentWallpaper.id}</span>
           </div>
-        )}
-      </div>
+          <div className="info-item">
+            <span className="info-label">画师:</span>
+            <span className="info-value">{currentWallpaper.artist}</span>
+          </div>
+          <div className="info-item">
+            <span className="info-label">来源:</span>
+            <span className="info-value">{currentWallpaper.source}</span>
+          </div>
+        </div>
 
-      {/* 指示器 */}
-      <div className="indicator-container">
-        {displayWallpapers.map((_, index) => (
-          <span 
-            key={index} 
-            className={`indicator ${index === currentIndex ? 'active' : ''} ${isTransitioning ? 'disabled' : ''}`}
-            onClick={() => handleIndicatorClick(index)}
-          />
-        ))}
+        {/* 指示器 */}
+        <div className="indicator-container">
+          {displayWallpapers.map((_, index) => (
+            <span 
+              key={index} 
+              className={`indicator ${index === currentIndex ? 'active' : ''} ${isTransitioning ? 'disabled' : ''}`}
+              onClick={() => handleIndicatorClick(index)}
+            />
+          ))}
+        </div>
+
+        {/* 在萌哩打开按钮 - 右下角 */}
+        <div className="moely-link-container">
+          <button 
+            className="moely-link-button"
+            onClick={() => api.openExternal(`https://www.moely.link/img/${encodeURIComponent(currentWallpaper.id)}/`)}
+            title="在萌哩打开"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{marginRight: '6px'}}>
+              <path d="M10 6V8H5V19H16V14H18V19C18 20.1 17.1 21 16 21H5C3.9 21 3 20.1 3 19V8C3 6.9 3.9 6 5 6H10Z" fill="currentColor"/>
+              <path d="M21 3H15V5H18.59L9.76 13.83L11.17 15.24L20 6.41V10H22V3C22 2.45 21.55 2 21 2V3Z" fill="currentColor"/>
+            </svg>
+            在萌哩打开
+          </button>
+        </div>
       </div>
 
       {/* 控制按钮组 */}
@@ -704,7 +554,7 @@ style={{
         {/* 设为壁纸按钮 */}
         <button 
           className="set-wallpaper-button"
-          onClick={handleSetWallpaper}
+          onClick={() => handleSetWallpaper(currentWallpaper)}
           disabled={isSettingWallpaper}
           title="设为壁纸"
         >
@@ -742,28 +592,13 @@ style={{
           {autoSetWallpaper ? '自动壁纸：开' : '自动壁纸：关'}
         </button>
       </div>
-      
-      {/* 在萌哩打开按钮 - 右下角 */}
-      <div className="moely-link-container">
-        <button 
-          className="moely-link-button"
-          onClick={() => ipcRenderer.invoke('open-external', `https://www.moely.link/img/${currentWallpaper.id}/`)}
-          title="在萌哩打开"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{marginRight: '6px'}}>
-            <path d="M10 6V8H5V19H16V14H18V19C18 20.1 17.1 21 16 21H5C3.9 21 3 20.1 3 19V8C3 6.9 3.9 6 5 6H10Z" fill="currentColor"/>
-            <path d="M21 3H15V5H18.59L9.76 13.83L11.17 15.24L20 6.41V10H22V3C22 2.45 21.55 2 21 2V3Z" fill="currentColor"/>
-          </svg>
-          在萌哩打开
-        </button>
-      </div>
 
       {/* 设置面板 */}
       {showSettings && (
         <div className="settings-panel-overlay" onClick={() => setShowSettings(false)}>
-          <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+          <div className="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={(e) => e.stopPropagation()}>
             <div className="settings-panel-header">
-              <h3>设置</h3>
+              <h3 id="settings-title">设置</h3>
               <button 
                 className="close-button"
                 onClick={() => setShowSettings(false)}
@@ -789,7 +624,79 @@ style={{
                   </label>
                 </div>
               </div>
+
+              <div className="setting-item">
+                <div className="setting-label">
+                  <span className="setting-title">关闭窗口</span>
+                  <span className="setting-description">点击关闭按钮时的默认行为</span>
+                </div>
+                <div className="setting-control">
+                  <div className="close-behavior-group" role="radiogroup" aria-label="关闭窗口行为">
+                    {[
+                      { value: 'tray', label: '缩小到托盘' },
+                      { value: 'exit', label: '退出程序' }
+                    ].map(option => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={closeBehavior === option.value}
+                        className={`close-behavior-option${closeBehavior === option.value ? ' active' : ''}`}
+                        onClick={() => handleCloseBehaviorChange?.(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
               
+              <div className="setting-item">
+                <div className="setting-label">
+                  <span className="setting-title setting-title-row">
+                    <span>主题色</span>
+                    <span className="theme-color-hex">{themeColor.toUpperCase()}</span>
+                  </span>
+                  <span className="setting-description">自定义界面高亮与背景粒子颜色</span>
+                </div>
+                <div className="setting-control">
+                  <div className="theme-color-picker" role="group" aria-label="主题色选择">
+                    {PRESET_THEME_COLORS.map(preset => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        className={`theme-swatch${themeColor === preset.value ? ' active' : ''}`}
+                        style={{ backgroundColor: preset.value }}
+                        title={preset.name}
+                        aria-label={preset.name}
+                        aria-pressed={themeColor === preset.value}
+                        onClick={() => handleThemeColorChange?.(preset.value)}
+                      />
+                    ))}
+                    <label className="theme-custom-input" title="自定义颜色">
+                      <input
+                        type="color"
+                        aria-label="自定义主题色"
+                        value={themeColor}
+                        onChange={event => handleThemeColorChange?.(event.target.value)}
+                      />
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M12 3C7.03 3 3 6.58 3 11C3 13.4 4.19 15.56 6.08 17.02C6.59 17.42 6.84 18.08 6.67 18.71L6.29 20.13C6.13 20.73 6.72 21.25 7.29 21.02L9.36 20.17C9.79 20 10.27 19.98 10.72 20.08C11.14 20.17 11.57 20.22 12 20.22C16.97 20.22 21 16.64 21 12.22C21 7.8 16.97 3 12 3Z" stroke="currentColor" strokeWidth="1.8" />
+                      </svg>
+                    </label>
+                    {themeColor !== DEFAULT_THEME_COLOR && (
+                      <button
+                        type="button"
+                        className="theme-reset-btn"
+                        onClick={() => handleThemeColorChange?.(DEFAULT_THEME_COLOR)}
+                      >
+                        默认
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="setting-item">
                 <div className="setting-label">
                   <span className="setting-title">检查更新</span>
@@ -822,12 +729,6 @@ style={{
                 </div>
               </div>
               
-              {updateStatus && (
-                <div className="update-status">
-                  {updateStatus}
-                </div>
-              )}
-              
               {cacheStatus && (
                 <div className="cache-status">
                   {cacheStatus}
@@ -837,7 +738,28 @@ style={{
           </div>
         </div>
       )}
+      {showEditor && currentWallpaper && (
+        <WallpaperEditorModal
+          wallpaper={currentWallpaper}
+          isPreviewActive={previewActive}
+          onClose={() => setShowEditor(false)}
+          onPreviewEdited={handlePreviewEdited}
+          onApplyWallpaper={handleApplyEditedWallpaper}
+          onSaveLocal={handleSaveEditedWallpaper}
+        />
+      )}
+      {previewActive && currentWallpaper && (
+        <WallpaperPreviewOverlay
+          wallpaper={editedPreviewUrl ? { ...currentWallpaper, imageUrl: editedPreviewUrl } : currentWallpaper}
+          hasMultiple={!editedPreviewUrl && displayWallpapers.length > 1}
+          onPrevious={() => setCurrentIndex(prev => prev === 0 ? displayWallpapers.length - 1 : prev - 1)}
+          onNext={() => setCurrentIndex(prev => (prev + 1) % displayWallpapers.length)}
+          onExit={closePreview}
+        />
+      )}
     </div>
+    {toastView}
+    </>
   );
 };
 

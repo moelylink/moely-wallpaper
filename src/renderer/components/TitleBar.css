@@ -4,10 +4,10 @@
   left: 0;
   right: 0;
   height: 32px;
-  background: var(--glass-bg);
+  background: rgba(14, 14, 18, 0.86);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -15,7 +15,7 @@
   -webkit-app-region: drag;
 }
 
-.title-bar-drag {
+.title-bar .title-bar-drag {
   flex: 1;
   height: 100%;
   display: flex;
@@ -23,35 +23,29 @@
   padding-left: 12px;
 }
 
-.title-bar-title {
+.title-bar .title-bar-title {
   display: flex;
   align-items: center;
   gap: 8px;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   -webkit-app-region: no-drag;
   user-select: none;
 }
 
-.title-bar-icon {
-  width: 20px;
-  height: 20px;
+.title-bar .title-bar-icon {
+  width: 18px;
+  height: 18px;
   color: var(--primary-color);
-  animation: iconFloat 3s ease-in-out infinite;
 }
 
-@keyframes iconFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
-}
-
-.title-bar-controls {
+.title-bar .title-bar-controls {
   display: flex;
   -webkit-app-region: no-drag;
 }
 
-.title-bar-button {
+.title-bar .title-bar-button {
   width: 46px;
   height: 32px;
   border: none;
@@ -61,37 +55,33 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.title-bar-button svg {
-  width: 16px;
-  height: 16px;
+.title-bar .title-bar-button svg {
+  width: 15px;
+  height: 15px;
 }
 
-.title-bar-button:hover {
-  background: rgba(255, 255, 255, 0.1);
+.title-bar .title-bar-button:hover {
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
 
-.title-bar-button.minimize:hover {
-  background: rgba(255, 255, 255, 0.1);
+.title-bar .title-bar-button.close:hover {
+  background: #e81123;
+  color: #ffffff;
 }
 
-.title-bar-button.maximize:hover {
-  background: rgba(255, 255, 255, 0.1);
+.title-bar .title-bar-button:active {
+  background: rgba(255, 255, 255, 0.14);
 }
 
-.title-bar-button.close:hover {
-  background: rgb(232, 17, 35);
-  color: white;
+.title-bar .title-bar-button.close:active {
+  background: #c50f1f;
 }
 
-.title-bar-button:active {
-  transform: scale(0.95);
-}
-
-/* Adjust main content to account for title bar */
+/* 主容器为顶部固定标题栏预留空间 */
 .App {
   padding-top: 32px;
 }

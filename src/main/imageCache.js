@@ -1,337 +1,301 @@
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import axios from 'axios';
-import crypto from 'crypto';
-import { app } from 'electron';
-import { getAppUserAgent } from './userAgent.js';
+import { validateImageUrl } from './security.js';
+
+const MAX_IMAGE_BYTES = 100 * 1024 * 1024;
+const MAX_CACHE_AGE = 7 * 24 * 60 * 60 * 1000;
+const CACHE_FILE = /^[a-f0-9]{32}\.(?:jpe?g|png|gif|webp|bmp|avif|img)$/;
+
+function cancelled() {
+  return new DOMException('缓存任务已取消', 'AbortError');
+}
+
+// 检查格式及常见格式的结尾/长度，拒绝 HTML 和截断文件。
+async function validateImageFile(filePath, expectedSize) {
+  const file = await fsp.open(filePath, 'r');
+  try {
+    const { size } = await file.stat();
+    if (size < 12 || size > MAX_IMAGE_BYTES || size !== expectedSize) return false;
+    const head = Buffer.alloc(Math.min(size, 32));
+    const tail = Buffer.alloc(12);
+    await file.read(head, 0, head.length, 0);
+    await file.read(tail, 0, tail.length, size - tail.length);
+    if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+      return tail[10] === 0xff && tail[11] === 0xd9;
+    }
+    if (head.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+      return tail.subarray(0, 8).equals(Buffer.from([0, 0, 0, 0, 73, 69, 78, 68]));
+    }
+    if (['GIF87a', 'GIF89a'].includes(head.toString('ascii', 0, 6))) return tail[11] === 0x3b;
+    if (head.toString('ascii', 0, 4) === 'RIFF' && head.toString('ascii', 8, 12) === 'WEBP') {
+      return head.readUInt32LE(4) + 8 === size;
+    }
+    if (head.toString('ascii', 0, 2) === 'BM') return head.readUInt32LE(2) === size;
+    if (head.toString('ascii', 4, 8) === 'ftyp') {
+      return /avif|avis/.test(head.toString('ascii', 8));
+    }
+    return false;
+  } finally {
+    await file.close();
+  }
+}
 
 class ImageCache {
-  constructor() {
-    this.cacheDir = path.join(app.getPath('userData'), 'wallpaper-cache');
-    this.metadataFile = path.join(this.cacheDir, 'metadata.json');
-    this.ensureCacheDir();
+  constructor(cacheDir, { request = axios, userAgent = 'MoelyWallpaper' } = {}) {
+    this.cacheDir = cacheDir;
+    this.metadataFile = path.join(cacheDir, 'metadata.json');
+    this.request = request;
+    this.userAgent = userAgent;
+    this.metadata = {};
+    this.inFlight = new Map();
+    this.controllers = new Set();
+    this.batches = new Set();
+    this.generation = 0;
+    this.metadataWrite = Promise.resolve();
+    this.clearPromise = null;
+    this.ready = this.initialize();
   }
 
-  ensureCacheDir() {
-    if (!fs.existsSync(this.cacheDir)) {
-      fs.mkdirSync(this.cacheDir, { recursive: true });
+  async initialize() {
+    await fsp.mkdir(this.cacheDir, { recursive: true });
+    try {
+      const metadata = JSON.parse(await fsp.readFile(this.metadataFile, 'utf8'));
+      if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+        for (const [url, info] of Object.entries(metadata)) {
+          try {
+            validateImageUrl(url);
+            if (info && Number.isFinite(info.fileSize) && info.fileSize > 0) this.metadata[url] = info;
+          } catch {
+            // 忽略损坏的索引记录，不让一条错误记录阻塞其余缓存。
+          }
+        }
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') console.error('Ignoring invalid cache metadata:', error.message);
+    }
+    for (const file of await fsp.readdir(this.cacheDir)) {
+      if (file.endsWith('.part') || file.startsWith('metadata.json.')) {
+        await fsp.rm(path.join(this.cacheDir, file), { force: true });
+      }
     }
   }
 
-  // 生成基于URL的文件名
   generateFileName(url) {
     const hash = crypto.createHash('md5').update(url).digest('hex');
-    const ext = path.extname(url).split('?')[0] || '.jpg';
+    const extension = path.extname(new URL(url).pathname).toLowerCase();
+    const ext = /^\.(jpe?g|png|gif|webp|bmp|avif)$/.test(extension) ? extension : '.img';
     return `${hash}${ext}`;
   }
 
-  // 获取本地文件路径
   getLocalPath(url) {
-    const fileName = this.generateFileName(url);
-    return path.join(this.cacheDir, fileName);
+    return path.join(this.cacheDir, this.generateFileName(url));
   }
 
-  // 检查文件是否存在且完整
-  exists(url) {
-    const localPath = this.getLocalPath(url);
-    if (!fs.existsSync(localPath)) {
-      return false;
-    }
-    
-    // 检查文件大小，如果为0字节则认为下载不完整
-    try {
-      const stats = fs.statSync(localPath);
-      if (stats.size === 0) {
-        console.log(`Removing empty cached file: ${localPath}`);
-        fs.unlinkSync(localPath);
-        return false;
-      }
-      
-      // 检查缓存是否过期（7天）
-      if (this.isCacheExpired(url)) {
-        console.log(`Removing expired cached file: ${localPath}`);
-        this.removeExpiredCache(url);
-        return false;
-      }
-      
-      return true;
-    } catch (error) {
-      console.error(`Error checking file stats:`, error);
-      return false;
-    }
-  }
-
-  // 读取元数据
-  readMetadata() {
-    try {
-      if (fs.existsSync(this.metadataFile)) {
-        const data = fs.readFileSync(this.metadataFile, 'utf8');
-        return JSON.parse(data);
-      }
-    } catch (error) {
-      console.error('Error reading metadata:', error);
-    }
-    return {};
-  }
-
-  // 写入元数据
-  writeMetadata(metadata) {
-    try {
-      fs.writeFileSync(this.metadataFile, JSON.stringify(metadata, null, 2));
-    } catch (error) {
-      console.error('Error writing metadata:', error);
-    }
-  }
-
-  // 检查缓存是否过期（7天）
   isCacheExpired(url) {
-    const metadata = this.readMetadata();
-    const cacheInfo = metadata[url];
-    
-    if (!cacheInfo || !cacheInfo.downloadTime) {
-      return true; // 没有下载时间信息，认为已过期
-    }
-    
-    const downloadTime = new Date(cacheInfo.downloadTime);
-    const now = new Date();
-    const daysDiff = (now - downloadTime) / (1000 * 60 * 60 * 24);
-    
-    return daysDiff > 7; // 超过7天认为过期
+    const time = Date.parse(this.metadata[url]?.downloadTime);
+    return !Number.isFinite(time) || Date.now() - time > MAX_CACHE_AGE;
   }
 
-  // 移除过期的缓存
-  removeExpiredCache(url) {
+  async exists(url) {
+    await this.ready;
+    const info = this.metadata[url];
+    if (this.clearPromise || !info || this.isCacheExpired(url)) return false;
     try {
-      const localPath = this.getLocalPath(url);
-      if (fs.existsSync(localPath)) {
-        fs.unlinkSync(localPath);
-      }
-      
-      // 从元数据中移除
-      const metadata = this.readMetadata();
-      delete metadata[url];
-      this.writeMetadata(metadata);
-      
-      console.log(`Removed expired cache for: ${url}`);
-    } catch (error) {
-      console.error(`Error removing expired cache for ${url}:`, error);
+      return await validateImageFile(this.getLocalPath(url), info.fileSize);
+    } catch {
+      return false;
     }
   }
 
-  // 清理所有过期缓存
-  cleanupExpiredCache() {
-    console.log('Starting cleanup of expired cache...');
-    const metadata = this.readMetadata();
-    let cleanedCount = 0;
-    
-    for (const url in metadata) {
-      if (this.isCacheExpired(url)) {
-        this.removeExpiredCache(url);
-        cleanedCount++;
-      }
-    }
-    
-    console.log(`Cleanup completed. Removed ${cleanedCount} expired cache entries.`);
-    return cleanedCount;
-  }
-
-  // 下载并缓存图片
-  async downloadImage(url, wallpaperId) {
-    const localPath = this.getLocalPath(url);
-    
-    if (this.exists(url)) {
-      console.log(`Image already cached: ${wallpaperId}`);
-      return localPath;
-    }
-
-    try {
-      console.log(`Downloading image: ${wallpaperId} from ${url}`);
-      
-      const response = await axios({
-        method: 'GET',
-        url: url,
-        responseType: 'stream',
-        timeout: 30000, // 30秒超时
-        headers: {
-          'User-Agent': getAppUserAgent()
-        }
-      });
-
-      const writer = fs.createWriteStream(localPath);
-      
-      return new Promise((resolve, reject) => {
-        // 监听响应数据流的错误
-        response.data.on('error', (error) => {
-          console.error(`Stream error for ${wallpaperId}:`, error);
-          writer.destroy();
-          // 清理失败的文件
-          if (fs.existsSync(localPath)) {
-            fs.unlinkSync(localPath);
-          }
-          reject(error);
-        });
-
-        writer.on('finish', () => {
-          console.log(`Image downloaded successfully: ${wallpaperId}`);
-          
-          // 验证文件大小
-          const stats = fs.statSync(localPath);
-          if (stats.size === 0) {
-            console.error(`Downloaded file is empty: ${wallpaperId}`);
-            fs.unlinkSync(localPath);
-            reject(new Error('Downloaded file is empty'));
-            return;
-          }
-          
-          // 更新元数据
-          const metadata = this.readMetadata();
-          metadata[url] = {
-            id: wallpaperId,
-            localPath: localPath,
-            downloadTime: new Date().toISOString(),
-            originalUrl: url,
-            fileSize: stats.size
-          };
-          this.writeMetadata(metadata);
-          
-          resolve(localPath);
-        });
-
-        writer.on('error', (error) => {
-          console.error(`Writer error for ${wallpaperId}:`, error);
-          // 清理失败的文件
-          if (fs.existsSync(localPath)) {
-            fs.unlinkSync(localPath);
-          }
-          reject(error);
-        });
-        
-        // 开始管道传输
-        response.data.pipe(writer);
-      });
-
-    } catch (error) {
-      console.error(`Error downloading image ${wallpaperId}:`, error);
-      throw error;
-    }
-  }
-
-  // 获取本地图片URL（file:// protocol）
-  getLocalImageUrl(url) {
-    const localPath = this.getLocalPath(url);
-    if (fs.existsSync(localPath)) {
-      return `file://${localPath}`;
-    }
-    return null;
-  }
-
-  // 批量下载壁纸 - 顺序下载，一张一张下
-  async batchDownload(wallpapers, progressCallback) {
-    const results = [];
-    let completed = 0;
-    
-    console.log(`Starting sequential download of ${wallpapers.length} images...`);
-    
-    for (const wallpaper of wallpapers) {
+  writeMetadata() {
+    const data = JSON.stringify(this.metadata, null, 2);
+    const tempPath = `${this.metadataFile}.${crypto.randomUUID()}.part`;
+    const write = this.metadataWrite.catch(() => {}).then(async () => {
       try {
-        console.log(`Downloading image ${completed + 1}/${wallpapers.length}: ${wallpaper.id}`);
-        
-        const localPath = await this.downloadImage(wallpaper.imageUrl, wallpaper.id);
-        results.push({
-          ...wallpaper,
-          localPath: localPath,
-          cached: true
-        });
-        
-        console.log(`✓ Successfully downloaded: ${wallpaper.id}`);
-      } catch (error) {
-        console.error(`✗ Failed to download ${wallpaper.id}:`, error.message);
-        results.push({
-          ...wallpaper,
-          cached: false,
-          error: error.message
-        });
+        await fsp.writeFile(tempPath, data, { flag: 'wx' });
+        await fsp.rename(tempPath, this.metadataFile);
+      } finally {
+        await fsp.rm(tempPath, { force: true });
       }
-      
-      completed++;
-      if (progressCallback) {
-        progressCallback(completed, wallpapers.length);
-      }
-      
-      // 在每次下载之间添加小延迟，避免对服务器造成压力
-      if (completed < wallpapers.length) {
-        console.log(`Waiting 1 second before next download...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-    
-    console.log(`Sequential download completed. Success: ${results.filter(r => r.cached).length}/${wallpapers.length}`);
-    return results;
+    });
+    this.metadataWrite = write;
+    return write;
   }
 
-  // 清理缓存
-  clearCache() {
-    try {
-      let clearedCount = 0;
-      if (fs.existsSync(this.cacheDir)) {
-        // 首先尝试删除所有文件
-        const files = fs.readdirSync(this.cacheDir);
-        for (const file of files) {
-          const filePath = path.join(this.cacheDir, file);
-          try {
-            const stat = fs.statSync(filePath);
-            if (stat.isFile()) {
-              fs.unlinkSync(filePath);
-              clearedCount++;
-            }
-          } catch (fileError) {
-            console.log(`Failed to delete file ${filePath}:`, fileError.message);
-            // 跳过无法删除的文件
-          }
+  async cleanupExpiredCache() {
+    await this.ready;
+    let cleaned = 0;
+    for (const url of Object.keys(this.metadata)) {
+      if (!this.inFlight.has(url) && this.isCacheExpired(url)) {
+        try {
+          await fsp.rm(this.getLocalPath(url), { force: true });
+          delete this.metadata[url];
+          cleaned++;
+        } catch (error) {
+          console.error('Failed to remove expired cache:', error.message);
         }
-        
-        // 然后重新创建缓存目录
-        this.ensureCacheDir();
-        console.log(`Cache cleared successfully. Removed ${clearedCount} files.`);
       }
-      return clearedCount;
-    } catch (error) {
-      console.error('Error clearing cache:', error);
-      throw error;
     }
+    if (cleaned) await this.writeMetadata();
+    return cleaned;
   }
 
-  // 获取缓存统计信息
-  getCacheStats() {
-    const metadata = this.readMetadata();
-    const stats = {
-      totalImages: Object.keys(metadata).length,
-      cacheSize: 0,
-      oldestImage: null,
-      newestImage: null
+  downloadImage(url, wallpaperId) {
+    try {
+      validateImageUrl(url);
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    if (this.clearPromise) return Promise.reject(cancelled());
+    if (this.inFlight.has(url)) return this.inFlight.get(url);
+    const generation = this.generation;
+    const controller = new AbortController();
+    this.controllers.add(controller);
+    const task = this.download(url, wallpaperId, controller, generation).finally(() => {
+      this.inFlight.delete(url);
+      this.controllers.delete(controller);
+    });
+    this.inFlight.set(url, task);
+    return task;
+  }
+
+  async download(url, wallpaperId, controller, generation) {
+    const { signal } = controller;
+    const checkCancelled = () => {
+      if (signal.aborted || generation !== this.generation) throw cancelled();
     };
-
+    const localPath = this.getLocalPath(url);
+    const tempPath = `${localPath}.${crypto.randomUUID()}.part`;
+    let published = false;
+    let response;
+    const deadline = setTimeout(() => controller.abort(), 30000);
     try {
-      if (fs.existsSync(this.cacheDir)) {
-        const files = fs.readdirSync(this.cacheDir);
-        for (const file of files) {
-          if (file !== 'metadata.json') {
-            const filePath = path.join(this.cacheDir, file);
-            try {
-              const stat = fs.statSync(filePath);
-              stats.cacheSize += stat.size;
-            } catch (fileError) {
-              // 跳过无法访问的文件（可能正在使用中）
-              console.log(`Skipping file ${file} due to permission error:`, fileError.message);
-            }
+      await this.ready;
+      checkCancelled();
+      if (await this.exists(url)) {
+        checkCancelled();
+        return localPath;
+      }
+      response = await this.request({
+        method: 'GET', url, responseType: 'stream', timeout: 30000, signal,
+        decompress: false,
+        headers: { 'User-Agent': this.userAgent, 'Accept-Encoding': 'identity' },
+        beforeRedirect: options => {
+          if (options.protocol !== 'https:') throw new Error('Image redirect must use HTTPS');
+        }
+      });
+      checkCancelled();
+      let size = 0;
+      const limiter = new Transform({
+        transform(chunk, encoding, callback) {
+          size += chunk.length;
+          callback(size > MAX_IMAGE_BYTES ? new Error('图片超过 100 MB 限制') : null, chunk);
+        }
+      });
+      await pipeline(response.data, limiter, fs.createWriteStream(tempPath, { flags: 'wx' }), { signal });
+      checkCancelled();
+      const length = Number(response.headers?.['content-length']);
+      if ((Number.isFinite(length) && length > 0 && length !== size) ||
+          !await validateImageFile(tempPath, size)) {
+        throw new Error('图片下载不完整或格式不受支持');
+      }
+      checkCancelled();
+      await fsp.rename(tempPath, localPath);
+      published = true;
+      checkCancelled();
+      this.metadata[url] = {
+        id: wallpaperId, downloadTime: new Date().toISOString(), originalUrl: url, fileSize: size
+      };
+      await this.writeMetadata();
+      checkCancelled();
+      return localPath;
+    } catch (error) {
+      response?.data?.destroy();
+      if (published) {
+        delete this.metadata[url];
+        await fsp.rm(localPath, { force: true });
+      }
+      throw error;
+    } finally {
+      clearTimeout(deadline);
+      await fsp.rm(tempPath, { force: true });
+    }
+  }
+
+  async getLocalImageUrl(url) {
+    if (!await this.exists(url)) return null;
+    return `wallpaper-cache://image/${this.generateFileName(url)}`;
+  }
+
+  async resolveCacheUrl(value) {
+    const url = new URL(value);
+    const file = decodeURIComponent(url.pathname.slice(1));
+    if (url.protocol !== 'wallpaper-cache:' || url.hostname !== 'image' ||
+        url.port || url.username || url.password || url.search || url.hash || !CACHE_FILE.test(file)) return null;
+    await this.ready;
+    const originalUrl = Object.keys(this.metadata).find(key => this.generateFileName(key) === file);
+    return originalUrl && await this.exists(originalUrl) ? this.getLocalPath(originalUrl) : null;
+  }
+
+  batchDownload(wallpapers, onCached) {
+    if (this.clearPromise) return Promise.reject(cancelled());
+    const generation = this.generation;
+    const task = (async () => {
+      const results = [];
+      for (const wallpaper of wallpapers) {
+        if (generation !== this.generation) break;
+        try {
+          await this.downloadImage(wallpaper.originalUrl || wallpaper.imageUrl, wallpaper.id);
+          if (generation !== this.generation) break;
+          const imageUrl = await this.getLocalImageUrl(wallpaper.originalUrl || wallpaper.imageUrl);
+          if (generation !== this.generation) break;
+          if (imageUrl) {
+            const result = { ...wallpaper, imageUrl, isLocal: true, cached: true };
+            results.push(result);
+            onCached?.(result);
           }
+        } catch (error) {
+          if (generation !== this.generation) break;
+          results.push({ ...wallpaper, cached: false, error: error.message });
         }
       }
-    } catch (error) {
-      console.error('Error getting cache stats:', error);
-    }
+      return results;
+    })().finally(() => this.batches.delete(task));
+    this.batches.add(task);
+    return task;
+  }
 
-    return stats;
+  clearCache() {
+    if (this.clearPromise) return this.clearPromise;
+    this.generation++;
+    for (const controller of this.controllers) controller.abort();
+    this.clearPromise = (async () => {
+      await this.ready;
+      await Promise.allSettled([...this.inFlight.values(), ...this.batches]);
+      await this.metadataWrite.catch(() => {});
+      let clearedCount = 0;
+      for (const file of await fsp.readdir(this.cacheDir, { withFileTypes: true })) {
+        if (!file.isFile()) continue;
+        await fsp.unlink(path.join(this.cacheDir, file.name));
+        if (CACHE_FILE.test(file.name)) clearedCount++;
+      }
+      this.metadata = {};
+      await this.writeMetadata();
+      return clearedCount;
+    })().finally(() => { this.clearPromise = null; });
+    return this.clearPromise;
+  }
+
+  async cancelDownloads() {
+    this.generation++;
+    for (const controller of this.controllers) controller.abort();
+    await Promise.allSettled([...this.inFlight.values(), ...this.batches]);
+    await this.metadataWrite.catch(() => {});
   }
 }
 
