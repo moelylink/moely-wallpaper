@@ -6,6 +6,11 @@ import { getUpdateInfo } from './updateVersion.js';
 
 export const DEFAULT_VERSION_URL = 'https://wallpaper.moely.link/app/version.txt';
 export const DEFAULT_DOWNLOAD_URL = 'https://dl.moely.link/wallpaper/setup.exe';
+export const DEFAULT_MAC_DOWNLOAD_URL = 'https://dl.moely.link/wallpaper/moely-wallpaper.dmg';
+
+export function getDefaultDownloadUrl(platform = process.platform) {
+  return platform === 'darwin' ? DEFAULT_MAC_DOWNLOAD_URL : DEFAULT_DOWNLOAD_URL;
+}
 
 /**
  * 管理应用自动检查更新、安装包后台流式下载与安装启动。
@@ -14,8 +19,9 @@ export default class AppUpdater {
   constructor({
     updatesDir,
     currentVersion,
+    platform = process.platform,
     versionUrl = DEFAULT_VERSION_URL,
-    downloadUrl = DEFAULT_DOWNLOAD_URL,
+    downloadUrl = getDefaultDownloadUrl(platform),
     userAgent = 'moely-wallpaper',
     httpClient = axios,
     onStateChange = null,
@@ -23,6 +29,7 @@ export default class AppUpdater {
   }) {
     this.updatesDir = path.resolve(updatesDir);
     this.currentVersion = currentVersion;
+    this.platform = platform;
     this.versionUrl = versionUrl;
     this.downloadUrl = downloadUrl;
     this.userAgent = userAgent;
@@ -56,7 +63,10 @@ export default class AppUpdater {
 
   _resolveInstallerPath(version) {
     const safeVersion = String(version || '').replace(/[^0-9A-Za-z._-]/g, '_');
-    const target = path.resolve(this.updatesDir, `moely-wallpaper-setup-${safeVersion}.exe`);
+    const fileName = this.platform === 'darwin'
+      ? `moely-wallpaper-${safeVersion}.dmg`
+      : `moely-wallpaper-setup-${safeVersion}.exe`;
+    const target = path.resolve(this.updatesDir, fileName);
     const relative = path.relative(this.updatesDir, target);
     if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
       throw new Error('Invalid installer path');

@@ -23,6 +23,7 @@ let catalog;
 let appSettings;
 let appUpdater;
 let telemetry;
+let appStartedAt = Date.now();
 let autoLauncher;
 let autoUpdateTimer = null;
 let autoUpdateInterval = null;
@@ -52,36 +53,55 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'wallpaper-cache', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }
 ]);
 
+function getWallpaperBinaryPath(platform = process.platform) {
+  const binaryName = platform === 'win32'
+    ? 'windows-wallpaper-x86-64.exe'
+    : (platform === 'darwin' ? 'macos-wallpaper' : '');
+  if (!binaryName) return '';
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'wallpaper', 'source', binaryName)
+    : path.join(__dirname, '../../node_modules/wallpaper/source', binaryName);
+}
+
+function runWallpaperBinary(args, { timeoutMs = 15000, timeoutMessage = 'Wallpaper binary timed out' } = {}) {
+  const binaryPath = getWallpaperBinaryPath();
+  if (!binaryPath || !fs.existsSync(binaryPath)) {
+    return Promise.reject(new Error('Wallpaper binary not found'));
+  }
+  return new Promise((resolve, reject) => {
+    const child = spawn(binaryPath, args);
+    let stdout = '';
+    let stderr = '';
+    const timeout = setTimeout(() => {
+      child.kill();
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+    child.stdout.on('data', data => { stdout = (stdout + data.toString()).slice(0, 4096); });
+    child.stderr.on('data', data => { stderr = (stderr + data.toString()).slice(-4096); });
+    child.on('close', code => {
+      clearTimeout(timeout);
+      if (code === 0) resolve(stdout.trim());
+      else reject(new Error(`Wallpaper executable failed (${code}): ${stderr}`));
+    });
+    child.on('error', spawnError => {
+      clearTimeout(timeout);
+      reject(spawnError);
+    });
+  });
+}
+
 const setWallpaperCustom = async imagePath => {
   const scale = appSettings?.getWallpaperScale() || 'fill';
   try {
     await setWallpaper(imagePath, { scale });
     return { success: true, method: 'wallpaper-package' };
   } catch (error) {
-    if (process.platform !== 'win32') throw error;
-    const wallpaperExePath = app.isPackaged
-      ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'wallpaper', 'source', 'windows-wallpaper-x86-64.exe')
-      : path.join(__dirname, '../../node_modules/wallpaper/source/windows-wallpaper-x86-64.exe');
-    if (!fs.existsSync(wallpaperExePath)) throw error;
-    return new Promise((resolve, reject) => {
-      const child = spawn(wallpaperExePath, ['set', imagePath, '--scale', scale]);
-      let stderr = '';
-      const timeout = setTimeout(() => {
-        child.kill();
-        reject(new Error('设置壁纸超时'));
-      }, 15000);
-      child.stdout.resume();
-      child.stderr.on('data', data => { stderr = (stderr + data.toString()).slice(-4096); });
-      child.on('close', code => {
-        clearTimeout(timeout);
-        if (code === 0) resolve({ success: true, method: 'custom-executable' });
-        else reject(new Error(`Wallpaper executable failed (${code}): ${stderr}`));
-      });
-      child.on('error', spawnError => {
-        clearTimeout(timeout);
-        reject(spawnError);
-      });
-    });
+    if (!['win32', 'darwin'].includes(process.platform)) throw error;
+    const args = process.platform === 'darwin'
+      ? ['set', path.resolve(imagePath), '--screen', 'all', '--scale', scale]
+      : ['set', imagePath, '--scale', scale];
+    await runWallpaperBinary(args, { timeoutMs: 15000, timeoutMessage: '设置壁纸超时' });
+    return { success: true, method: 'custom-executable' };
   }
 };
 
@@ -152,40 +172,17 @@ async function resolveCurrentWallpaperThumbnail(current) {
   return localUrl || catalogItem.originalUrl || '';
 }
 
-function getWindowsWallpaperBinaryPath() {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'wallpaper', 'source', 'windows-wallpaper-x86-64.exe')
-    : path.join(__dirname, '../../node_modules/wallpaper/source/windows-wallpaper-x86-64.exe');
-}
-
 async function getSystemWallpaperPath() {
   try {
     const readViaBinary = async () => {
-      const binaryPath = getWindowsWallpaperBinaryPath();
-      if (!fs.existsSync(binaryPath)) return '';
-      return new Promise(resolve => {
-        const child = spawn(binaryPath, ['get']);
-        let stdout = '';
-        const timeout = setTimeout(() => {
-          child.kill();
-          resolve('');
-        }, 1500);
-        child.stdout.on('data', data => { stdout = (stdout + data.toString()).slice(0, 4096); });
-        child.stderr.resume();
-        child.on('close', code => {
-          clearTimeout(timeout);
-          resolve(code === 0 ? stdout.trim() : '');
-        });
-        child.on('error', () => {
-          clearTimeout(timeout);
-          resolve('');
-        });
-      });
+      const args = process.platform === 'darwin' ? ['get', '--screen', 'main'] : ['get'];
+      return runWallpaperBinary(args, { timeoutMs: 1500 }).catch(() => '');
     };
-    const reader = process.platform === 'win32' && app.isPackaged
+    const isBinaryPreferred = ['win32', 'darwin'].includes(process.platform) && app.isPackaged;
+    const reader = isBinaryPreferred
       ? readViaBinary()
       : getWallpaper().catch(error => {
-          if (process.platform !== 'win32') throw error;
+          if (!['win32', 'darwin'].includes(process.platform)) throw error;
           return readViaBinary();
         });
     const currentPath = await Promise.race([
@@ -502,7 +499,11 @@ function createTray() {
     icon = icon.resize({ width: 16, height: 16 });
   }
   tray = new Tray(icon);
-  tray.on('click', () => showMainWindow());
+  if (process.platform === 'darwin') {
+    tray.on('click', () => { toggleTrayMenu().catch(console.error); });
+  } else {
+    tray.on('click', () => showMainWindow());
+  }
   tray.on('right-click', () => { toggleTrayMenu().catch(console.error); });
   updateTrayMenu();
   return tray;
@@ -515,6 +516,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width, height, minWidth: 800, minHeight: 600,
     frame: false, transparent: true, titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 9 } } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false, contextIsolation: true, webSecurity: true, sandbox: true,
@@ -595,7 +597,9 @@ if (!hasInstanceLock) {
         return new Response(null, { status: 404 });
       }
     });
-    autoLauncher = new AutoLaunch({ name: '萌哩壁纸', path: process.execPath, isHidden: true });
+    autoLauncher = process.platform === 'darwin'
+      ? null
+      : new AutoLaunch({ name: '萌哩壁纸', path: process.execPath, isHidden: true });
     const isPackagedExecutable = app.isPackaged && !/electron(\.exe)?$/i.test(path.basename(process.execPath));
     telemetry = new TelemetryClient({
       appKey: 'A-US-8264310255',
@@ -606,7 +610,7 @@ if (!hasInstanceLock) {
     });
     if (!appSettings.hasAutoStartPreference()) {
       if (isPackagedExecutable) {
-        await autoLauncher.enable().catch(error => console.error('Failed to enable auto-launch on first run:', error));
+        await setAutoStartEnabled(true).catch(error => console.error('Failed to enable auto-launch on first run:', error));
       }
       await appSettings.setAutoStart(true);
     }
@@ -620,8 +624,11 @@ if (!hasInstanceLock) {
           const child = spawn(installerPath, [], { detached: true, stdio: 'ignore' });
           child.unref();
           app.quit();
+        } else if (process.platform === 'darwin') {
+          const openError = await shell.openPath(installerPath);
+          if (openError) throw new Error(openError);
         } else {
-          await shell.openExternal('https://dl.moely.link/wallpaper/setup.exe');
+          await shell.openExternal(appUpdater?.downloadUrl || 'https://dl.moely.link/wallpaper/setup.exe');
         }
       }
     });
@@ -637,6 +644,7 @@ if (!hasInstanceLock) {
         createWindow();
       }
       ensureTrayWindow().catch(() => {});
+      appStartedAt = Date.now();
       telemetry.trackEvent('app_started', { silent: shouldStartSilently });
       if (app.isPackaged && appSettings.getAutoUpdate()) {
         autoUpdateTimer = setTimeout(() => {
@@ -678,7 +686,6 @@ app.on('before-quit', event => {
     autoUpdateInterval = null;
   }
   appUpdater?.cancel();
-  telemetry?.cancel();
   if (trayWindow && !trayWindow.isDestroyed()) {
     trayWindow.destroy();
     trayWindow = null;
@@ -688,7 +695,18 @@ app.on('before-quit', event => {
     tray = null;
   }
   cancelFetches();
-  Promise.resolve(imageCache?.cancelDownloads()).catch(console.error).finally(() => {
+  const durationSeconds = Math.max(0, Math.round((Date.now() - appStartedAt) / 1000));
+  const flushQuitTelemetry = telemetry
+    ? Promise.race([
+        telemetry.trackEvent('app_quit', { durationSeconds }, { timeoutMs: 1500 }),
+        new Promise(resolve => setTimeout(resolve, 1500))
+      ])
+    : Promise.resolve();
+  Promise.allSettled([
+    Promise.resolve(imageCache?.cancelDownloads()),
+    flushQuitTelemetry
+  ]).finally(() => {
+    telemetry?.cancel();
     quitAllowed = true;
     app.quit();
   });
@@ -757,10 +775,27 @@ handle('open-external', async (_event, value) => {
     return { success: false, error: error.message };
   }
 });
+async function isAutoStartEnabled() {
+  if (process.platform === 'darwin') {
+    return Boolean(app.getLoginItemSettings().openAtLogin);
+  }
+  return autoLauncher ? autoLauncher.isEnabled() : false;
+}
+
+async function setAutoStartEnabled(enabled) {
+  if (process.platform === 'darwin') {
+    app.setLoginItemSettings({ openAtLogin: enabled, openAsHidden: true });
+    return;
+  }
+  if (!autoLauncher) return;
+  if (enabled) await autoLauncher.enable();
+  else await autoLauncher.disable();
+}
+
 handle('get-settings', async () => {
   const isPackagedExecutable = app.isPackaged && !/electron(\.exe)?$/i.test(path.basename(process.execPath));
   return {
-    autoStart: isPackagedExecutable ? await autoLauncher.isEnabled() : appSettings.getAutoStart(),
+    autoStart: isPackagedExecutable ? await isAutoStartEnabled() : appSettings.getAutoStart(),
     closeBehavior: appSettings.getCloseBehavior(),
     wallpaperScale: appSettings.getWallpaperScale(),
     themeColor: appSettings.getThemeColor(),
@@ -770,8 +805,7 @@ handle('get-settings', async () => {
 });
 handle('set-auto-start', async (_event, enabled) => {
   if (typeof enabled !== 'boolean') throw new Error('Invalid auto-start value');
-  if (enabled) await autoLauncher.enable();
-  else await autoLauncher.disable();
+  await setAutoStartEnabled(enabled);
   await appSettings.setAutoStart(enabled);
   return { success: true };
 });

@@ -131,3 +131,39 @@ test('AppUpdater cleans up temporary file on stream failure and rejects invalid 
   await assert.rejects(() => updater.installUpdate(), /安装包尚未就绪/);
   await fs.promises.rm(updatesDir, { recursive: true, force: true });
 });
+
+test('AppUpdater uses macOS dmg URL and installer path when platform is darwin', async () => {
+  const updatesDir = createTempDir();
+  const payload = Buffer.from('fake-dmg-installer');
+  let launchedPath = null;
+
+  const updater = new AppUpdater({
+    updatesDir,
+    currentVersion: '1.1.0',
+    platform: 'darwin',
+    launchInstaller: async filePath => { launchedPath = filePath; },
+    httpClient: {
+      get: async url => {
+        if (url.endsWith('version.txt')) return { data: '1.2.0', headers: {} };
+        if (url.endsWith('moely-wallpaper.dmg')) {
+          return {
+            data: Readable.from([payload]),
+            headers: { 'content-length': String(payload.length) }
+          };
+        }
+        throw new Error(`Unexpected URL: ${url}`);
+      }
+    }
+  });
+
+  const result = await updater.checkAndDownload();
+  assert.equal(result.success, true);
+  assert.equal(result.hasUpdate, true);
+  assert.equal(path.basename(result.installerPath), 'moely-wallpaper-1.2.0.dmg');
+  assert.equal(result.updateUrl, 'https://dl.moely.link/wallpaper/moely-wallpaper.dmg');
+
+  const installResult = await updater.installUpdate();
+  assert.equal(installResult.success, true);
+  assert.equal(launchedPath, result.installerPath);
+  await fs.promises.rm(updatesDir, { recursive: true, force: true });
+});

@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('wallpaperAPI', Object.freeze({
+  platform: typeof process !== 'undefined' ? process.platform : '',
   fetchWallpapers: requestId => ipcRenderer.invoke('fetch-wallpapers', requestId),
   cancelFetchWallpapers: requestId => ipcRenderer.send('cancel-fetch-wallpapers', requestId),
   cacheImages: () => ipcRenderer.invoke('cache-images'),

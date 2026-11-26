@@ -72,7 +72,7 @@ export default class TelemetryClient {
     return this.sessionId;
   }
 
-  async trackEvent(eventName, props = {}) {
+  async trackEvent(eventName, props = {}, { timeoutMs = 5000 } = {}) {
     if (!this.enabled || !this.endpoint || typeof eventName !== 'string' || !eventName.trim()) {
       return false;
     }
@@ -99,7 +99,7 @@ export default class TelemetryClient {
     this.controllers.add(controller);
     try {
       await this.httpClient.post(this.endpoint, payload, {
-        timeout: 5000,
+        timeout: timeoutMs,
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',

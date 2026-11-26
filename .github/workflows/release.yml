@@ -98,3 +98,52 @@ jobs:
             dist/*.exe
             dist/*.blockmap
             dist/latest*.yml
+
+  build-macos:
+    needs: build-windows
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag name
+        run: |
+          CURRENT_TAG="${{ inputs.tag }}"
+          if [ -z "$CURRENT_TAG" ]; then
+            CURRENT_TAG="${{ github.ref_name }}"
+          fi
+          echo "TAG_NAME=$CURRENT_TAG" >> "$GITHUB_ENV"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run main process tests
+        run: npm test
+
+      - name: Run renderer tests
+        run: npm run test:renderer
+
+      - name: Build macOS installer
+        run: npm run dist
+
+      - name: Upload macOS artifacts to Draft Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: ${{ env.TAG_NAME }}
+          draft: true
+          prerelease: ${{ contains(env.TAG_NAME, '-') }}
+          fail_on_unmatched_files: false
+          files: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest-mac*.yml
