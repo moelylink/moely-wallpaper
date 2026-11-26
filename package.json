@@ -46,6 +46,7 @@
   "build": {
     "appId": "link.moely.wallpaper",
     "productName": "萌哩壁纸",
+    "artifactName": "setup-v${version}.${ext}",
     "compression": "maximum",
     "afterPack": "scripts/afterPack.cjs",
     "electronLanguages": [

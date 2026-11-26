@@ -2,7 +2,7 @@ name: Sync R2 Installer and Site Version on Release
 
 on:
   release:
-    types: [published]
+    types: [published, prereleased, released]
   workflow_dispatch:
     inputs:
       tag:
@@ -35,16 +35,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.meta.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           mkdir -p tmp-release
-          gh release download "$TAG" --pattern "*.exe" --dir tmp-release
+          gh release download "$TAG" --repo "$REPO" --pattern "*.exe" --dir tmp-release
           EXE_FILE=$(find tmp-release -maxdepth 1 -type f -name "*.exe" | head -n 1)
           if [ -z "$EXE_FILE" ]; then
             echo "No .exe installer found in release $TAG" >&2
             exit 1
           fi
           mv -f "$EXE_FILE" tmp-release/setup.exe
-          if gh release download "$TAG" --pattern "*.dmg" --dir tmp-release; then
+          if gh release download "$TAG" --repo "$REPO" --pattern "*.dmg" --dir tmp-release; then
             DMG_FILE=$(find tmp-release -maxdepth 1 -type f -name "*.dmg" | head -n 1)
             if [ -n "$DMG_FILE" ]; then
               mv -f "$DMG_FILE" tmp-release/setup.dmg
