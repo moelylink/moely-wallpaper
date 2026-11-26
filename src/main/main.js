@@ -15,6 +15,7 @@ import { getAppUserAgent } from './userAgent.js';
 import { getUpdateInfo } from './updateVersion.js';
 import AppUpdater from './appUpdater.js';
 import TelemetryClient from './telemetry.js';
+import { ensureWindowsCompatibleImage, setWindowsWallpaperViaSystemApi } from './windowsWallpaperFallback.js';
 import AutoLaunch from 'auto-launch';
 
 let mainWindow;
@@ -81,7 +82,11 @@ function runWallpaperBinary(args, { timeoutMs = 15000, timeoutMessage = 'Wallpap
     child.on('close', code => {
       clearTimeout(timeout);
       if (code === 0) resolve(stdout.trim());
-      else reject(new Error(`Wallpaper executable failed (${code}): ${stderr}`));
+      else {
+        const hexCode = typeof code === 'number' ? ` (0x${(code >>> 0).toString(16).toUpperCase()})` : '';
+        const detail = stderr.trim();
+        reject(new Error(`Wallpaper executable failed (${code}${hexCode})${detail ? `: ${detail}` : ''}`));
+      }
     });
     child.on('error', spawnError => {
       clearTimeout(timeout);
@@ -96,10 +101,20 @@ const setWallpaperCustom = async imagePath => {
     await setWallpaper(imagePath, { scale });
     return { success: true, method: 'wallpaper-package' };
   } catch (error) {
-    if (!['win32', 'darwin'].includes(process.platform)) throw error;
-    const args = process.platform === 'darwin'
-      ? ['set', path.resolve(imagePath), '--screen', 'all', '--scale', scale]
-      : ['set', imagePath, '--scale', scale];
+    if (process.platform === 'win32') {
+      const compatiblePath = await ensureWindowsCompatibleImage(imagePath, {
+        outputDir: path.join(app.getPath('userData'), 'wallpaper-cache'),
+        convertToPng: sourcePath => {
+          const image = nativeImage.createFromPath(sourcePath);
+          if (image.isEmpty()) throw new Error('无法解码壁纸图片');
+          return image.toPNG();
+        }
+      });
+      await setWindowsWallpaperViaSystemApi(compatiblePath, { scale, timeoutMs: 15000 });
+      return { success: true, method: 'windows-system-api' };
+    }
+    if (process.platform !== 'darwin') throw error;
+    const args = ['set', path.resolve(imagePath), '--screen', 'all', '--scale', scale];
     await runWallpaperBinary(args, { timeoutMs: 15000, timeoutMessage: '设置壁纸超时' });
     return { success: true, method: 'custom-executable' };
   }
@@ -570,9 +585,11 @@ function createWindow() {
   if (isDevelopment) mainWindow.webContents.openDevTools();
 }
 
+app.commandLine.appendSwitch('disable-features', 'SkiaGraphite');
+
 const hasInstanceLock = app.requestSingleInstanceLock();
 if (!hasInstanceLock) {
-  app.quit();
+  app.exit(0);
 } else {
   app.whenReady().then(async () => {
     session.defaultSession.setUserAgent(getAppUserAgent());
