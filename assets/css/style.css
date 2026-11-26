@@ -297,13 +297,13 @@ button,input,select,textarea,label {
 	padding-right:24px
 }
 }.container {
-	max-width:1128px
+	max-width:90%
 }
 .container-sm {
-	max-width:848px
+	max-width:1080px
 }
 .container .container-sm {
-	max-width: 800px;
+	max-width: 1020px;
 	padding-left:0;
 	padding-right:0
 }
@@ -572,8 +572,13 @@ button,input,select,textarea,label {
 	position:absolute;
 	top:-168px;
 	left:-722px;
-	width:1440px;
-	height:324px
+	width:100vw;
+	min-width:1440px;
+	height:auto
+}
+.hero-media-illustration {
+	left:auto;
+	right:calc(-0.5vw - 27px)
 }
 }.features-wrap {
 	max-width:540px;
@@ -680,10 +685,13 @@ button,input,select,textarea,label {
 	content:'';
 	position:absolute;
 	bottom:-32px;
-	left:calc(50% - 720px);
-	height:263px;
-	width:1440px;
-	background-image:url("../images/cta-illustration-light.svg")
+	left:0;
+	height:clamp(263px,18.26vw,480px);
+	width:100%;
+	background-image:url("../images/cta-illustration-light.svg");
+	background-repeat:no-repeat;
+	background-position:center bottom;
+	background-size:cover
 }
 .lights-off .cta::before {
 	background-image:url("../images/cta-illustration-dark.svg")

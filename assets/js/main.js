@@ -34,17 +34,31 @@
 
   // Light switcher
   if (lightSwitch) {
+    const THEME_STORAGE_KEY = 'moely-theme-preference'
     const colorSchemeQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null
-    let hasManualToggle = false
+    let savedTheme = null
+    try {
+      savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+    } catch (e) {
+      savedTheme = null
+    }
+    let hasManualToggle = savedTheme === 'dark' || savedTheme === 'light'
 
     const applySystemTheme = function (isDark) {
       lightSwitch.checked = !isDark
       checkLights()
     }
 
-    if (colorSchemeQuery) {
+    if (hasManualToggle) {
+      lightSwitch.checked = savedTheme === 'light'
+      checkLights()
+    } else if (colorSchemeQuery) {
       applySystemTheme(colorSchemeQuery.matches)
+    } else {
+      checkLights()
+    }
 
+    if (colorSchemeQuery) {
       const handleSystemThemeChange = function (e) {
         if (!hasManualToggle) {
           applySystemTheme(e.matches)
@@ -56,13 +70,16 @@
       } else if (colorSchemeQuery.addListener) {
         colorSchemeQuery.addListener(handleSystemThemeChange)
       }
-    } else {
-      checkLights()
     }
 
     window.addEventListener('load', checkLights)
     lightSwitch.addEventListener('change', function () {
       hasManualToggle = true
+      try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, lightSwitch.checked ? 'light' : 'dark')
+      } catch (e) {
+        // Ignore storage errors when localStorage is unavailable
+      }
       checkLights()
     })
   }
