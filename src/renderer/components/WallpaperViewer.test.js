@@ -54,7 +54,7 @@ test('automatic wallpaper failure pauses the mode instead of retrying every seco
 test('clearing cache updates parent state without scheduling a page reload', async () => {
   await act(async () => container.querySelector('.clear-cache-button').click());
   expect(props.onCacheCleared).toHaveBeenCalledTimes(1);
-  expect(container.querySelector('.cache-status').textContent).toContain('删除了 1 个文件');
+  expect(document.querySelector('.app-toast--success').textContent).toContain('已删除 1 个文件');
 });
 
 test('unmount cancels status and interaction timers', async () => {
@@ -186,6 +186,18 @@ test('close behavior setting renders options and notifies parent on change', () 
   expect(options[1].getAttribute('aria-checked')).toBe('false');
   act(() => options[1].click());
   expect(props.handleCloseBehaviorChange).toHaveBeenCalledWith('exit');
+});
+
+test('silent start toggle appears only when autoStart is enabled', () => {
+  renderViewer({ showSettings: true, autoStart: false, silentStart: false });
+  expect(container.querySelector('input[aria-label="静默启动"]')).toBeNull();
+  const handleSilentStartChange = jest.fn();
+  renderViewer({ showSettings: true, autoStart: true, silentStart: false, handleSilentStartChange });
+  const toggle = container.querySelector('input[aria-label="静默启动"]');
+  expect(toggle).not.toBeNull();
+  expect(toggle.checked).toBe(false);
+  act(() => toggle.click());
+  expect(handleSilentStartChange).toHaveBeenCalledWith(true);
 });
 
 test('navigating left and right assigns directional slide classes and right-entry keyframes exist', () => {

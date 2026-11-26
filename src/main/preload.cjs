@@ -10,14 +10,32 @@ contextBridge.exposeInMainWorld('wallpaperAPI', Object.freeze({
   saveEditedWallpaper: payload => ipcRenderer.invoke('save-edited-wallpaper', payload),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setAutoStart: enabled => ipcRenderer.invoke('set-auto-start', enabled),
+  setSilentStart: enabled => ipcRenderer.invoke('set-silent-start', enabled),
+  setAutoUpdate: enabled => ipcRenderer.invoke('set-auto-update', enabled),
   setCloseBehavior: behavior => ipcRenderer.invoke('set-close-behavior', behavior),
   setThemeColor: color => ipcRenderer.invoke('set-theme-color', color),
   syncCurrentWallpaper: id => ipcRenderer.send('sync-current-wallpaper', id),
   fetchNotice: () => ipcRenderer.invoke('fetch-notice'),
   checkUpdate: () => ipcRenderer.invoke('check-update'),
+  getUpdateState: () => ipcRenderer.invoke('get-update-state'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  onUpdateStatus: callback => {
+    if (typeof callback !== 'function') throw new TypeError('Callback required');
+    const listener = (_event, state) => callback(state);
+    ipcRenderer.on('update-status', listener);
+    return () => ipcRenderer.removeListener('update-status', listener);
+  },
   openExternal: url => ipcRenderer.invoke('open-external', url),
   minimize: () => ipcRenderer.send('window-minimize'),
   maximize: () => ipcRenderer.send('window-maximize'),
+  isMaximized: () => ipcRenderer.invoke('is-window-maximized'),
+  onMaximizedChange: callback => {
+    if (typeof callback !== 'function') throw new TypeError('Callback required');
+    const listener = (_event, maximized) => callback(Boolean(maximized));
+    ipcRenderer.on('window-maximized-change', listener);
+    return () => ipcRenderer.removeListener('window-maximized-change', listener);
+  },
   close: () => ipcRenderer.send('window-close'),
   setFullscreen: enabled => ipcRenderer.invoke('set-fullscreen', enabled),
   onFullscreenChange: callback => {

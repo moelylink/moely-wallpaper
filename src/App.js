@@ -17,6 +17,8 @@ function App() {
   const [warning, setWarning] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [autoStart, setAutoStart] = useState(false);
+  const [silentStart, setSilentStart] = useState(false);
+  const [autoUpdate, setAutoUpdate] = useState(true);
   const [closeBehavior, setCloseBehavior] = useState('tray');
   const [themeColor, setThemeColor] = useState(DEFAULT_THEME_COLOR);
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
@@ -137,6 +139,28 @@ function App() {
     }
   };
 
+  const handleSilentStartChange = async enabled => {
+    const previous = silentStart;
+    setSilentStart(enabled);
+    try {
+      await api.setSilentStart(enabled);
+    } catch (error) {
+      setSilentStart(previous);
+      notify({ type: 'error', title: '设置静默启动失败', description: error.message, duration: 5000 });
+    }
+  };
+
+  const handleAutoUpdateChange = async enabled => {
+    const previous = autoUpdate;
+    setAutoUpdate(enabled);
+    try {
+      await api.setAutoUpdate(enabled);
+    } catch (error) {
+      setAutoUpdate(previous);
+      notify({ type: 'error', title: '设置自动检查更新失败', description: error.message, duration: 5000 });
+    }
+  };
+
   const handleCacheCleared = () => {
     // 不刷新页面，否则启动逻辑会立即重新下载刚刚删除的缓存。
     setWallpapers(previous => previous.map(wallpaper => ({
@@ -155,6 +179,8 @@ function App() {
     api.getSettings().then(settings => {
       if (!active) return;
       setAutoStart(settings.autoStart === true);
+      setSilentStart(settings.silentStart === true);
+      setAutoUpdate(settings.autoUpdate !== false);
       setCloseBehavior(settings.closeBehavior === 'exit' ? 'exit' : 'tray');
       const nextColor = applyThemeColorToDocument(settings.themeColor || DEFAULT_THEME_COLOR);
       setThemeColor(nextColor);
@@ -240,6 +266,10 @@ function App() {
           setShowSettings={setShowSettings}
           autoStart={autoStart}
           handleAutoStartChange={handleAutoStartChange}
+          silentStart={silentStart}
+          handleSilentStartChange={handleSilentStartChange}
+          autoUpdate={autoUpdate}
+          handleAutoUpdateChange={handleAutoUpdateChange}
           closeBehavior={closeBehavior}
           handleCloseBehaviorChange={handleCloseBehaviorChange}
           themeColor={themeColor}

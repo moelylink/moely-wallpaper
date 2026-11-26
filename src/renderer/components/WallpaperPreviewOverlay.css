@@ -124,9 +124,12 @@
   position: absolute;
   top: 20px;
   left: 16px;
+  max-height: calc(100vh - 82px);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 16px 12px;
 }
 
 .wallpaper-preview-overlay .mock-desktop-icon {

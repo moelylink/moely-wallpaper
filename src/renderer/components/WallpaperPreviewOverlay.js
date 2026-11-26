@@ -6,13 +6,19 @@ import networkIcon from '../assets/desktop-mock/network.png';
 import folderIcon from '../assets/desktop-mock/folder.png';
 import explorerIcon from '../assets/desktop-mock/explorer.png';
 import moelyIcon from '../assets/desktop-mock/moely.png';
+import controlPanelIcon from '../assets/desktop-mock/control-panel.png';
+import chromeIcon from '../assets/desktop-mock/chrome.png';
+import wechatIcon from '../assets/desktop-mock/wechat.png';
 import './WallpaperPreviewOverlay.css';
 
 const DESKTOP_ICONS = [
   { id: 'pc', label: '此电脑', src: thisPcIcon },
   { id: 'recycle-bin', label: '回收站', src: recycleBinIcon },
+  { id: 'control-panel', label: '控制面板', src: controlPanelIcon },
   { id: 'network', label: '网络', src: networkIcon },
   { id: 'folder', label: '壁纸收藏', src: folderIcon },
+  { id: 'chrome', label: 'Google Chrome', src: chromeIcon },
+  { id: 'wechat', label: '微信', src: wechatIcon },
   { id: 'moely', label: '萌哩壁纸', src: moelyIcon }
 ];
 
@@ -111,6 +117,12 @@ const WallpaperPreviewOverlay = ({ wallpaper, hasMultiple = false, onPrevious, o
               </span>
               <span className="mock-taskbar-item">
                 <img src={explorerIcon} alt="" />
+              </span>
+              <span className="mock-taskbar-item">
+                <img src={chromeIcon} alt="" />
+              </span>
+              <span className="mock-taskbar-item">
+                <img src={wechatIcon} alt="" />
               </span>
               <span className="mock-taskbar-item active">
                 <img src={moelyIcon} alt="" />

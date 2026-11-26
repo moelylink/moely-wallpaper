@@ -14,6 +14,8 @@ const isInteractiveTarget = target => !!target?.closest?.(
 
 const WallpaperViewer = ({
   wallpapers, showSettings, setShowSettings, autoStart, handleAutoStartChange,
+  silentStart = false, handleSilentStartChange,
+  autoUpdate = true, handleAutoUpdateChange,
   closeBehavior = 'tray', handleCloseBehaviorChange,
   themeColor = DEFAULT_THEME_COLOR, handleThemeColorChange,
   isPreviewFullscreen = false, onEnterPreview, onExitPreview,
@@ -34,15 +36,18 @@ const WallpaperViewer = ({
   const [showEditor, setShowEditor] = useState(false);
   const [localPreview, setLocalPreview] = useState(false);
   const [editedPreviewUrl, setEditedPreviewUrl] = useState(null);
+  const [updateState, setUpdateState] = useState(null);
+  const [showUpdatePrompt, setShowUpdatePrompt] = useState(false);
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const promptedVersionRef = useRef(null);
   const previewActive = onEnterPreview ? isPreviewFullscreen : localPreview;
-  const interactionsBlocked = showSettings || showEditor || previewActive || interactionBlocked;
+  const interactionsBlocked = showSettings || showEditor || showUpdatePrompt || previewActive || interactionBlocked;
   const [autoSetWallpaper, setAutoSetWallpaper] = useState(false);
   const [lastAutoSetId, setLastAutoSetId] = useState(null);
   const settingRef = useRef(false);
   const mountedRef = useRef(true);
   const timersRef = useRef(new Set());
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-  const [cacheStatus, setCacheStatus] = useState('');
   const [isClearingCache, setIsClearingCache] = useState(false);
   
   const schedule = useCallback((callback, delay) => {
@@ -161,53 +166,92 @@ ${error.message}`, duration: 6000
   // 清除缓存功能
   const handleClearCache = async () => {
     if (isClearingCache) return;
-    
     setIsClearingCache(true);
     setAutoSetWallpaper(false);
     setLastAutoSetId(null);
-    setCacheStatus('正在清除缓存...');
-    
+    const toastId = notify({ type: 'loading', title: '正在清除缓存', duration: 0 });
     try {
       const result = await api.clearCache();
-      
+      if (!mountedRef.current) return;
       if (result.success) {
-        setCacheStatus(`缓存清除成功！删除了 ${result.clearedCount} 个文件`);
+        notify({
+          id: toastId,
+          type: 'success',
+          title: '缓存清除成功',
+          description: `已删除 ${result.clearedCount} 个文件`,
+          duration: 4000
+        });
         onCacheCleared();
       } else {
-        setCacheStatus(`清除缓存失败：${result.error}`);
+        notify({ id: toastId, type: 'error', title: '清除缓存失败', description: result.error || '请稍后重试', duration: 5000 });
       }
     } catch (error) {
       console.error('Error clearing cache:', error);
-      setCacheStatus('清除缓存时发生错误');
+      if (mountedRef.current) {
+        notify({ id: toastId, type: 'error', title: '清除缓存失败', description: error.message || '清除缓存时发生错误', duration: 5000 });
+      }
     } finally {
-      setIsClearingCache(false);
-      // 5秒后清除状态
-      schedule(() => {
-        setCacheStatus('');
-      }, 5000);
+      if (mountedRef.current) setIsClearingCache(false);
     }
   };
+
+  // 订阅自动更新状态，安装包就绪后弹出安装提示
+  useEffect(() => {
+    const applyUpdateState = nextState => {
+      if (!mountedRef.current || !nextState) return;
+      setUpdateState(nextState);
+      if (
+        nextState.status === 'downloaded' &&
+        nextState.latestVersion &&
+        promptedVersionRef.current !== nextState.latestVersion
+      ) {
+        promptedVersionRef.current = nextState.latestVersion;
+        setShowUpdatePrompt(true);
+      }
+    };
+
+    api?.getUpdateState?.().then(applyUpdateState).catch(() => {});
+    const unsubscribe = api?.onUpdateStatus?.(applyUpdateState);
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
 
   // 检查更新功能
   const handleCheckUpdate = async () => {
     if (isCheckingUpdate) return;
+    if (updateState?.status === 'downloaded' && updateState?.latestVersion) {
+      setShowUpdatePrompt(true);
+      return;
+    }
     setIsCheckingUpdate(true);
     const toastId = notify({ type: 'loading', title: '正在检查更新', duration: 0 });
     try {
-      const result = await api.checkUpdate();
+      const result = api.downloadUpdate ? await api.downloadUpdate() : await api.checkUpdate();
       if (!mountedRef.current) return;
       if (result.success) {
         if (result.hasUpdate) {
-          notify({
-            id: toastId,
-            type: 'info',
-            title: `发现新版本 ${result.latestVersion}`,
-            description: `当前版本 ${result.currentVersion}，即将打开下载链接`,
-            duration: 5000
-          });
-          schedule(() => {
-            api.openExternal(result.updateUrl).catch(console.error);
-          }, 2000);
+          if (result.installerPath) {
+            notify({
+              id: toastId,
+              type: 'success',
+              title: `新版本 ${result.latestVersion} 已下载`,
+              description: '请在弹出窗口确认安装',
+              duration: 4000
+            });
+            setShowUpdatePrompt(true);
+          } else {
+            notify({
+              id: toastId,
+              type: 'info',
+              title: `发现新版本 ${result.latestVersion}`,
+              description: `当前版本 ${result.currentVersion}，即将打开下载链接`,
+              duration: 5000
+            });
+            schedule(() => {
+              api.openExternal(result.updateUrl).catch(console.error);
+            }, 2000);
+          }
         } else {
           notify({ id: toastId, type: 'success', title: '已是最新版本', duration: 3000 });
         }
@@ -221,6 +265,34 @@ ${error.message}`, duration: 6000
       }
     } finally {
       if (mountedRef.current) setIsCheckingUpdate(false);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    if (isInstallingUpdate) return;
+    setIsInstallingUpdate(true);
+    try {
+      const result = await api.installUpdate?.();
+      if (!mountedRef.current) return;
+      if (result && result.success === false) {
+        notify({
+          type: 'error',
+          title: '启动安装程序失败',
+          description: result.error || '请尝试手动前往官网下载更新',
+          duration: 5000
+        });
+        setIsInstallingUpdate(false);
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        notify({
+          type: 'error',
+          title: '启动安装程序失败',
+          description: error?.message || '请稍后重试',
+          duration: 5000
+        });
+        setIsInstallingUpdate(false);
+      }
     }
   };
 
@@ -625,6 +697,26 @@ ${error.message}`, duration: 6000
                 </div>
               </div>
 
+              {autoStart && (
+                <div className="setting-item">
+                  <div className="setting-label">
+                    <span className="setting-title">静默启动</span>
+                    <span className="setting-description">开机自启时仅驻留系统托盘，不弹出主窗口</span>
+                  </div>
+                  <div className="setting-control">
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        aria-label="静默启动"
+                        checked={silentStart}
+                        onChange={(e) => handleSilentStartChange?.(e.target.checked)}
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
               <div className="setting-item">
                 <div className="setting-label">
                   <span className="setting-title">关闭窗口</span>
@@ -699,6 +791,23 @@ ${error.message}`, duration: 6000
 
               <div className="setting-item">
                 <div className="setting-label">
+                  <span className="setting-title">自动检查更新</span>
+                  <span className="setting-description">自动检查新版本并后台下载安装包</span>
+                </div>
+                <div className="setting-control">
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={autoUpdate}
+                      onChange={e => handleAutoUpdateChange?.(e.target.checked)}
+                    />
+                    <span className="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="setting-item">
+                <div className="setting-label">
                   <span className="setting-title">检查更新</span>
                   <span className="setting-description">检查是否有新版本可用</span>
                 </div>
@@ -728,12 +837,55 @@ ${error.message}`, duration: 6000
                   </button>
                 </div>
               </div>
-              
-              {cacheStatus && (
-                <div className="cache-status">
-                  {cacheStatus}
-                </div>
-              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {showUpdatePrompt && updateState?.status === 'downloaded' && (
+        <div className="update-prompt-overlay" onClick={() => setShowUpdatePrompt(false)}>
+          <div
+            className="update-prompt-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="update-prompt-title"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="update-prompt-header">
+              <h3 id="update-prompt-title">发现新版本 {updateState.latestVersion}</h3>
+              <button
+                type="button"
+                className="update-prompt-close"
+                onClick={() => setShowUpdatePrompt(false)}
+                aria-label="关闭更新提示"
+              >
+                ×
+              </button>
+            </div>
+            <div className="update-prompt-body">
+              <p>
+                新版本安装包已自动下载完成（{updateState.currentVersion} → {updateState.latestVersion}）。
+              </p>
+              <p className="update-prompt-hint">
+                点击“立即安装”将启动安装程序并自动退出当前应用。
+              </p>
+            </div>
+            <div className="update-prompt-actions">
+              <button
+                type="button"
+                className="update-prompt-btn secondary"
+                onClick={() => setShowUpdatePrompt(false)}
+                disabled={isInstallingUpdate}
+              >
+                稍后安装
+              </button>
+              <button
+                type="button"
+                className="update-prompt-btn primary"
+                onClick={handleInstallUpdate}
+                disabled={isInstallingUpdate}
+              >
+                {isInstallingUpdate ? '正在启动...' : '立即安装'}
+              </button>
             </div>
           </div>
         </div>

@@ -226,7 +226,7 @@ app.once('browser-window-created', (_event, window) => {
       let navigations = 0;
       window.webContents.on('did-start-navigation', () => navigations++);
       await evaluate("document.querySelector('.clear-cache-button').click()");
-      await waitFor(() => evaluate("document.querySelector('.cache-status')?.textContent.includes('缓存清除成功')"));
+      await waitFor(() => evaluate("document.querySelector('.app-toast--success')?.textContent.includes('缓存清除成功')"));
       assert.equal(navigations, 0);
       assert.deepEqual(fs.readdirSync(path.join(profile, 'wallpaper-cache')), ['metadata.json']);
       assert.deepEqual(JSON.parse(fs.readFileSync(path.join(profile, 'wallpaper-cache/metadata.json'), 'utf8')), {});
@@ -238,9 +238,12 @@ app.once('browser-window-created', (_event, window) => {
       await evaluate("document.querySelectorAll('.close-behavior-option')[0].click()");
       await waitFor(async () => (await evaluate('window.wallpaperAPI.getSettings()')).closeBehavior === 'tray');
       window.close();
-      await waitFor(() => !window.isVisible());
-      assert.equal(window.isDestroyed(), false);
-      window.show();
+      await waitFor(() => window.isDestroyed());
+      assert.equal(BrowserWindow.getAllWindows().length, 0);
+      app.emit('second-instance');
+      await waitFor(() => BrowserWindow.getAllWindows().length === 1);
+      const reopened = BrowserWindow.getAllWindows()[0];
+      await waitFor(() => !reopened.isDestroyed() && reopened.isVisible());
       assert.equal(errors.some(message => /Content Security Policy|Unable to load preload|not allowed to load local resource/i.test(message)), false, errors.join('\n'));
       console.log(JSON.stringify({ success: true, electronVersion: process.versions.electron, axiosVersion: axios.VERSION, sandbox: true, cacheProtocol: true, ipcIsolation: true, navigationBlocked: true, clearWithoutReload: true, offlineCatalog: true, opaqueLoading: true, crossDateSwitching: true, semanticUpdates: true, modalInputIsolation: true, independentToast: true, trayCloseBehavior: true, loadingScreenshot, screenshot, toastScreenshot, profile }, null, 2));
     })().catch(async error => {

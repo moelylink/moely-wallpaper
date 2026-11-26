@@ -18,7 +18,9 @@ function normalizeCurrentWallpaper(value) {
   const id = String(value.id).trim();
   if (!id || id.length > 128) return null;
   const artist = typeof value.artist === 'string' ? value.artist.slice(0, 500) : '';
-  return { id, artist, isEdited: Boolean(value.isEdited) };
+  const appliedPath = typeof value.appliedPath === 'string' ? value.appliedPath.slice(0, 1024) : '';
+  const systemPath = typeof value.systemPath === 'string' ? value.systemPath.slice(0, 1024) : '';
+  return { id, artist, isEdited: Boolean(value.isEdited), appliedPath, systemPath };
 }
 
 /**
@@ -30,7 +32,9 @@ class AppSettings {
     this.data = {
       closeBehavior: DEFAULT_CLOSE_BEHAVIOR,
       themeColor: DEFAULT_THEME_COLOR,
-      currentWallpaper: null
+      currentWallpaper: null,
+      silentStart: false,
+      autoUpdate: true
     };
     this.writeQueue = Promise.resolve();
     this.ready = this.load();
@@ -49,6 +53,12 @@ class AppSettings {
           next.themeColor = validColor;
         }
         next.currentWallpaper = normalizeCurrentWallpaper(raw.currentWallpaper);
+        if (typeof raw.silentStart === 'boolean') {
+          next.silentStart = raw.silentStart;
+        }
+        if (typeof raw.autoUpdate === 'boolean') {
+          next.autoUpdate = raw.autoUpdate;
+        }
         this.data = next;
       }
     } catch (error) {
@@ -68,6 +78,14 @@ class AppSettings {
 
   getCurrentWallpaper() {
     return this.data.currentWallpaper;
+  }
+
+  getSilentStart() {
+    return this.data.silentStart;
+  }
+
+  getAutoUpdate() {
+    return this.data.autoUpdate;
   }
 
   async _persist(patch) {
@@ -109,6 +127,20 @@ class AppSettings {
       throw new Error('Invalid current wallpaper');
     }
     return this._persist({ currentWallpaper: normalized });
+  }
+
+  async setSilentStart(enabled) {
+    if (typeof enabled !== 'boolean') {
+      throw new Error('Invalid silent start value');
+    }
+    return this._persist({ silentStart: enabled });
+  }
+
+  async setAutoUpdate(enabled) {
+    if (typeof enabled !== 'boolean') {
+      throw new Error('Invalid auto update value');
+    }
+    return this._persist({ autoUpdate: enabled });
   }
 }
 

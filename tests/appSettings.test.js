@@ -65,6 +65,34 @@ describe('AppSettings', () => {
 
     const reloaded = new AppSettings(filePath);
     await reloaded.ready;
-    assert.deepEqual(reloaded.getCurrentWallpaper(), { id: '126799507', artist: '星井やな', isEdited: false });
+    assert.deepEqual(reloaded.getCurrentWallpaper(), { id: '126799507', artist: '星井やな', isEdited: false, appliedPath: '', systemPath: '' });
+  });
+
+  it('defaults silentStart to false and persists boolean values', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'moely-settings-'));
+    const filePath = path.join(dir, 'settings.json');
+    const settings = new AppSettings(filePath);
+    await settings.ready;
+    assert.equal(settings.getSilentStart(), false);
+    await settings.setSilentStart(true);
+    await assert.rejects(() => settings.setSilentStart('yes'), /Invalid silent start value/);
+
+    const reloaded = new AppSettings(filePath);
+    await reloaded.ready;
+    assert.equal(reloaded.getSilentStart(), true);
+  });
+
+  it('defaults autoUpdate to true and persists boolean values', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'moely-settings-'));
+    const filePath = path.join(dir, 'settings.json');
+    const settings = new AppSettings(filePath);
+    await settings.ready;
+    assert.equal(settings.getAutoUpdate(), true);
+    await settings.setAutoUpdate(false);
+    await assert.rejects(() => settings.setAutoUpdate('no'), /Invalid auto update value/);
+
+    const reloaded = new AppSettings(filePath);
+    await reloaded.ready;
+    assert.equal(reloaded.getAutoUpdate(), false);
   });
 });

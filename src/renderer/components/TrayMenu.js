@@ -41,8 +41,14 @@ const TrayMenu = () => {
           </div>
         )}
         <div className="tray-menu-header">
-          <div className="tray-menu-caption">当前桌面壁纸</div>
-          {current ? (
+          <div className="tray-menu-caption">
+            {state.overwrittenByOther ? '桌面壁纸已被其他应用覆盖' : '当前桌面壁纸'}
+          </div>
+          {state.overwrittenByOther ? (
+            <div className="tray-menu-info" title={state.externalWallpaperName || '外部壁纸'}>
+              <span className="tray-menu-artist">{state.externalWallpaperName || '外部壁纸'}</span>
+            </div>
+          ) : current ? (
             <div className="tray-menu-info" title={`${current.id}${current.artist ? ` · ${current.artist}` : ''}`}>
               <span className="tray-menu-id">#{current.id}</span>
               {current.artist && <span className="tray-menu-artist">{current.artist}</span>}

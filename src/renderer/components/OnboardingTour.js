@@ -1,281 +1,244 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import './OnboardingTour.css';
+
+const TOUR_STEPS = [
+  {
+    id: 'welcome',
+    title: '欢迎使用萌哩壁纸',
+    content: '每日精选二次元动漫壁纸，支持本地缓存、壁纸微调与桌面效果实时预览。',
+    highlight: null,
+    position: 'center'
+  },
+  {
+    id: 'navigation',
+    title: '浏览与切换壁纸',
+    content: '支持键盘左右方向键、鼠标滚轮、点击两侧预览图或左右箭头按钮切换壁纸。',
+    highlight: '.carousel-3d-container',
+    position: 'bottom'
+  },
+  {
+    id: 'card-actions',
+    title: '编辑与全屏桌面预览',
+    content: '悬停当前壁纸右上角可进入编辑器裁剪调色，或打开全屏模拟桌面效果（不会改动真实桌面）。',
+    highlight: '.carousel-current .current-card-actions',
+    position: 'left'
+  },
+  {
+    id: 'set-wallpaper',
+    title: '设为壁纸与自动切换',
+    content: '一键应用当前壁纸到桌面，也可开启「自动壁纸」在切换浏览后自动设置。',
+    highlight: '.control-buttons',
+    position: 'left'
+  },
+  {
+    id: 'bottom-bar',
+    title: '壁纸信息与快速跳转',
+    content: '底部可查看画师与来源、点击指示器快速跳转，或在浏览器中打开萌哩原图页。',
+    highlight: '.indicator-container',
+    position: 'top'
+  },
+  {
+    id: 'settings',
+    title: '个性化与系统设置',
+    content: '支持自定义全局主题色、开机自启动、关闭窗口行为（托盘/退出）及缓存清理。',
+    highlight: '.settings-button',
+    position: 'left'
+  },
+  {
+    id: 'complete',
+    title: '准备就绪',
+    content: '现在可以开始挑选壁纸了。使用过程中随时按 F1 键即可重新打开本引导。',
+    highlight: null,
+    position: 'center'
+  }
+];
+
+const TOOLTIP_GAP = 18;
+const VIEWPORT_PADDING = 16;
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function computeTooltipLayout(targetRect, preferredPosition, tooltipWidth, tooltipHeight) {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const order = [preferredPosition, 'bottom', 'top', 'left', 'right'].filter(
+    (item, idx, arr) => item && item !== 'center' && arr.indexOf(item) === idx
+  );
+
+  const candidates = {
+    top: {
+      left: targetRect.left + targetRect.width / 2 - tooltipWidth / 2,
+      top: targetRect.top - TOOLTIP_GAP - tooltipHeight
+    },
+    bottom: {
+      left: targetRect.left + targetRect.width / 2 - tooltipWidth / 2,
+      top: targetRect.bottom + TOOLTIP_GAP
+    },
+    left: {
+      left: targetRect.left - TOOLTIP_GAP - tooltipWidth,
+      top: targetRect.top + targetRect.height / 2 - tooltipHeight / 2
+    },
+    right: {
+      left: targetRect.right + TOOLTIP_GAP,
+      top: targetRect.top + targetRect.height / 2 - tooltipHeight / 2
+    }
+  };
+
+  for (const placement of order) {
+    const pos = candidates[placement];
+    if (!pos) continue;
+    const fitsX = pos.left >= VIEWPORT_PADDING && pos.left + tooltipWidth <= vw - VIEWPORT_PADDING;
+    const fitsY = pos.top >= VIEWPORT_PADDING && pos.top + tooltipHeight <= vh - VIEWPORT_PADDING;
+    if (fitsX && fitsY) {
+      return {
+        placement,
+        style: {
+          top: `${Math.round(pos.top)}px`,
+          left: `${Math.round(pos.left)}px`
+        }
+      };
+    }
+  }
+
+  const fallback = candidates[order[0]] || {
+    left: (vw - tooltipWidth) / 2,
+    top: (vh - tooltipHeight) / 2
+  };
+  return {
+    placement: 'center',
+    style: {
+      top: `${Math.round(clamp(fallback.top, VIEWPORT_PADDING, Math.max(VIEWPORT_PADDING, vh - tooltipHeight - VIEWPORT_PADDING)))}px`,
+      left: `${Math.round(clamp(fallback.left, VIEWPORT_PADDING, Math.max(VIEWPORT_PADDING, vw - tooltipWidth - VIEWPORT_PADDING)))}px`
+    }
+  };
+}
 
 const OnboardingTour = ({ onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
+  const [spotlightRect, setSpotlightRect] = useState(null);
+  const [tooltipLayout, setTooltipLayout] = useState({ placement: 'center', style: {} });
+  const tooltipRef = useRef(null);
+  const completeTimerRef = useRef(null);
 
-  const steps = [
-    {
-      id: 'welcome',
-      title: '欢迎使用萌哩壁纸 🎨',
-      content: '发现精美的动漫壁纸，让你的桌面更加个性化！壁纸每日更新，图图有惊喜，天天都欣喜~',
-      highlight: null,
-      position: 'center'
-    },
-    {
-      id: 'navigation',
-      title: '切换壁纸 ⬅️➡️',
-      content: '使用左右箭头键、鼠标滚轮或点击两侧图片来浏览壁纸',
-      highlight: '.carousel-3d-container',
-      position: 'center'
-    },
-    {
-      id: 'set-wallpaper',
-      title: '设置壁纸 🖼️',
-      content: '点击此按钮将当前图片设为桌面壁纸，开启自动壁纸后将自动设置',
-      highlight: '.set-wallpaper-button',
-      position: 'left'
-    },
-    {
-      id: 'wallpaper-info',
-      title: '壁纸信息 ℹ️',
-      content: '在页面下方信息栏查看当前壁纸的ID、画师和来源信息',
-      highlight: '.wallpaper-info',
-      position: 'top'
-    },
-    {
-      id: 'indicators',
-      title: '快速跳转 🎯',
-      content: '您可以点击底部指示器可以快速跳转到任意壁纸',
-      highlight: '.indicator-container',
-      position: 'top'
-    },
-    {
-      id: 'moely-link',
-      title: '查看原图 🔗',
-      content: '点击"在萌哩打开"按钮可以在浏览器中查看高清原图',
-      highlight: '.moely-link-button',
-      position: 'left'
-    },
-    {
-      id: 'settings',
-      title: '设置 ⚙️',
-      content: '您可以在设置面板中设定开机自启，支持手动清除本地缓存',
-      highlight: '.settings-button',
-      position: 'center'
-    },
-    {
-      id: 'author',
-      title: '关于我们 👨‍💻',
-      content: '本应用由萌哩开发，致力于为二次元爱好者提供优质壁纸体验，项目已在GitHub上开源。',
-      highlight: null,
-      position: 'center'
-    },
-    {
-      id: 'complete',
-      title: '开始探索 🚀',
-      content: '现在你已经了解了所有功能，开始享受精美的壁纸吧！（F1键可随时重新观看本指引）',
-      highlight: null,
-      position: 'center'
-    }
-  ];
+  const currentStepData = TOUR_STEPS[currentStep];
 
-  const currentStepData = steps[currentStep];
+  const completeTour = useCallback(() => {
+    setIsVisible(false);
+    clearTimeout(completeTimerRef.current);
+    completeTimerRef.current = setTimeout(() => {
+      localStorage.setItem('moely-wallpaper-tour-completed', 'true');
+      onComplete();
+    }, 220);
+  }, [onComplete]);
 
-  const nextStep = () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
+  useEffect(() => () => clearTimeout(completeTimerRef.current), []);
+
+  const nextStep = useCallback(() => {
+    if (currentStep < TOUR_STEPS.length - 1) {
+      setCurrentStep(prev => prev + 1);
     } else {
       completeTour();
     }
-  };
+  }, [currentStep, completeTour]);
 
-  const prevStep = () => {
+  const prevStep = useCallback(() => {
     if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const skipTour = () => {
-    completeTour();
-  };
-
-  const completeTour = () => {
-    setIsVisible(false);
-    setTimeout(() => {
-      localStorage.setItem('moely-wallpaper-tour-completed', 'true');
-      onComplete();
-    }, 300);
-  };
-
-  // 键盘事件处理
-  useEffect(() => {
-    const handleKeyPress = (e) => {
-      if (!isVisible) return;
-      
-      if (e.key === 'ArrowRight' || e.key === 'Enter') {
-        nextStep();
-      } else if (e.key === 'ArrowLeft') {
-        prevStep();
-      } else if (e.key === 'Escape') {
-        skipTour();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentStep, isVisible]);
-
-  // 高亮元素
-  useEffect(() => {
-    if (currentStepData.highlight) {
-      const element = document.querySelector(currentStepData.highlight);
-      if (element) {
-        element.classList.add('tour-highlight');
-        return () => element.classList.remove('tour-highlight');
-      }
+      setCurrentStep(prev => prev - 1);
     }
   }, [currentStep]);
 
+  useEffect(() => {
+    const handleKeyPress = event => {
+      if (!isVisible) return;
+      if (event.key === 'ArrowRight' || event.key === 'Enter') {
+        event.preventDefault();
+        nextStep();
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        prevStep();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        completeTour();
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [isVisible, nextStep, prevStep, completeTour]);
+
+  const updatePositions = useCallback(() => {
+    const selector = currentStepData.highlight;
+    const element = selector ? document.querySelector(selector) : null;
+    if (!element) {
+      setSpotlightRect(null);
+      setTooltipLayout({ placement: 'center', style: {} });
+      return;
+    }
+
+    const rect = element.getBoundingClientRect();
+    const padded = {
+      top: rect.top - 6,
+      left: rect.left - 6,
+      width: rect.width + 12,
+      height: rect.height + 12,
+      right: rect.right + 6,
+      bottom: rect.bottom + 6
+    };
+    setSpotlightRect(padded);
+
+    if (currentStepData.position === 'center') {
+      setTooltipLayout({ placement: 'center', style: {} });
+      return;
+    }
+
+    const tooltipEl = tooltipRef.current;
+    const tooltipWidth = tooltipEl?.offsetWidth || 360;
+    const tooltipHeight = tooltipEl?.offsetHeight || 210;
+    setTooltipLayout(computeTooltipLayout(padded, currentStepData.position, tooltipWidth, tooltipHeight));
+  }, [currentStepData]);
+
+  useLayoutEffect(() => {
+    if (!isVisible) return undefined;
+    updatePositions();
+    window.addEventListener('resize', updatePositions);
+    return () => window.removeEventListener('resize', updatePositions);
+  }, [isVisible, updatePositions]);
+
   if (!isVisible) return null;
 
-  const getTooltipStyle = () => {
-    const highlight = currentStepData.highlight;
-    if (!highlight) return {};
+  const isCenter = !spotlightRect || tooltipLayout.placement === 'center';
 
-    const element = document.querySelector(highlight);
-    if (!element) return {};
+  return createPortal(
+    <div className="onboarding-overlay" role="dialog" aria-modal="true" aria-label="新手引导">
+      {spotlightRect ? (
+        <div
+          className="onboarding-spotlight"
+          style={{
+            top: `${spotlightRect.top}px`,
+            left: `${spotlightRect.left}px`,
+            width: `${spotlightRect.width}px`,
+            height: `${spotlightRect.height}px`
+          }}
+        />
+      ) : null}
+      <div className="onboarding-backdrop" />
 
-    const rect = element.getBoundingClientRect();
-    const position = currentStepData.position;
-    const tooltipWidth = 350; // 提示框宽度
-    const tooltipHeight = 220; // 提示框高度
-    const margin = 30; // 边距
-
-    // 尝试多个定位策略
-    const positions = ['top', 'bottom', 'left', 'right', 'center'];
-    let bestStyle = null;
-    let bestScore = -1;
-
-    for (const pos of positions) {
-      let style = {};
-      
-      switch (pos) {
-        case 'top':
-          style = {
-            top: rect.top - margin,
-            left: rect.left + rect.width / 2,
-            transform: 'translate(-50%, -100%)'
-          };
-          break;
-        case 'bottom':
-          style = {
-            top: rect.bottom + margin,
-            left: rect.left + rect.width / 2,
-            transform: 'translate(-50%, 0)'
-          };
-          break;
-        case 'left':
-          style = {
-            top: rect.top + rect.height / 2,
-            left: rect.left - margin,
-            transform: 'translate(-100%, -50%)'
-          };
-          break;
-        case 'right':
-          style = {
-            top: rect.top + rect.height / 2,
-            left: rect.right + margin,
-            transform: 'translate(0, -50%)'
-          };
-          break;
-        case 'center':
-          style = {
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            position: 'fixed'
-          };
-          break;
-      }
-
-      // 计算这个位置的得分（越高的分数越好）
-      let score = 0;
-      
-      // 检查是否在屏幕范围内
-      const left = typeof style.left === 'string' ? 
-        (style.left === '50%' ? window.innerWidth / 2 : 0) : 
-        style.left;
-      const top = typeof style.top === 'string' ? 
-        (style.top === '50%' ? window.innerHeight / 2 : 0) : 
-        style.top;
-
-      if (pos === 'center') {
-        score = 100; // 居中位置总是安全的
-      } else {
-        // 检查边界
-        const right = left + tooltipWidth;
-        const bottom = top + tooltipHeight;
-        
-        if (left >= margin && right <= window.innerWidth - margin && 
-            top >= margin && bottom <= window.innerHeight - margin) {
-          score = 90; // 完全在屏幕内
-        } else if (left >= 0 && right <= window.innerWidth && 
-                   top >= 0 && bottom <= window.innerHeight) {
-          score = 70; // 部分在屏幕内
-        } else {
-          score = 30; // 超出屏幕
-        }
-        
-        // 优先选择原始位置
-        if (pos === position) {
-          score += 10;
-        }
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestStyle = style;
-      }
-    }
-
-    // 如果最佳位置仍然有问题，使用居中位置
-    if (bestScore < 50) {
-      bestStyle = {
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        position: 'fixed'
-      };
-    }
-
-    return bestStyle;
-  };
-
-  // 获取高亮元素的位置和尺寸，用于创建镐空效果
-  const getHighlightRect = () => {
-    const highlight = currentStepData.highlight;
-    if (!highlight) return null;
-
-    const element = document.querySelector(highlight);
-    if (!element) return null;
-
-    const rect = element.getBoundingClientRect();
-    return {
-      top: rect.top - 8,
-      left: rect.left - 8,
-      width: rect.width + 16,
-      height: rect.height + 16
-    };
-  };
-
-  const isCenter = currentStepData.position === 'center' || !currentStepData.highlight;
-
-  return (
-    <div className="onboarding-overlay">
-      <div className="onboarding-backdrop" onClick={skipTour}></div>
-      
-      <div 
-        className={`onboarding-tooltip ${isCenter ? 'center' : ''}`}
-        style={!isCenter ? getTooltipStyle() : {}}
+      <div
+        ref={tooltipRef}
+        className={`onboarding-tooltip${isCenter ? ' center' : ''}`}
+        style={!isCenter ? tooltipLayout.style : {}}
       >
         <div className="tooltip-header">
           <div className="step-indicator">
-            {currentStep + 1} / {steps.length}
+            {currentStep + 1} / {TOUR_STEPS.length}
           </div>
-          <button className="skip-button" onClick={skipTour} title="跳过引导">
-            ×
+          <button type="button" className="skip-button" onClick={completeTour} title="跳过引导" aria-label="跳过引导">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
           </button>
         </div>
 
@@ -285,41 +248,50 @@ const OnboardingTour = ({ onComplete }) => {
         </div>
 
         <div className="tooltip-actions">
-          <button 
-            className="tour-button secondary" 
+          <button
+            type="button"
+            className="tour-button secondary"
             onClick={prevStep}
             disabled={currentStep === 0}
           >
             上一步
           </button>
-          
+
           <div className="progress-dots">
-            {steps.map((_, index) => (
-              <span 
-                key={index}
-                className={`dot ${index === currentStep ? 'active' : ''} ${index < currentStep ? 'completed' : ''}`}
+            {TOUR_STEPS.map((step, index) => (
+              <button
+                key={step.id}
+                type="button"
+                className={`dot${index === currentStep ? ' active' : ''}${index < currentStep ? ' completed' : ''}`}
+                aria-label={`第 ${index + 1} 步：${step.title}`}
                 onClick={() => setCurrentStep(index)}
               />
             ))}
           </div>
 
-          <button 
-            className="tour-button primary" 
+          <button
+            type="button"
+            className="tour-button primary"
             onClick={nextStep}
           >
-            {currentStep === steps.length - 1 ? '开始使用' : '下一步'}
+            {currentStep === TOUR_STEPS.length - 1 ? '开始使用' : '下一步'}
           </button>
         </div>
 
         {!isCenter && (
-          <div className={`tooltip-arrow ${currentStepData.position}`}></div>
+          <div className={`tooltip-arrow ${tooltipLayout.placement}`} />
         )}
       </div>
 
       <div className="keyboard-hints">
-        <span>💡 使用方向键导航，ESC跳过</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="2" y="6" width="20" height="12" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M6 10H8M11 10H13M16 10H18M7 14H17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+        <span>方向键 / Enter 切换步骤，ESC 跳过</span>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
