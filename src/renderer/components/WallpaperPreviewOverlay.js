@@ -31,12 +31,18 @@ function formatClock(date) {
   return { time: `${hours}:${minutes}`, date: `${year}/${month}/${day}` };
 }
 
-const WallpaperPreviewOverlay = ({ wallpaper, hasMultiple = false, onPrevious, onNext, onExit }) => {
-  const [fitMode, setFitMode] = useState('cover');
+const WallpaperPreviewOverlay = ({
+  wallpaper, wallpaperScale = 'fill', hasMultiple = false, onPrevious, onNext, onExit
+}) => {
+  const [fitMode, setFitMode] = useState(wallpaperScale === 'fit' ? 'contain' : 'cover');
   const [showDesktopMock, setShowDesktopMock] = useState(true);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [clock, setClock] = useState(() => formatClock(new Date()));
   const hideTimerRef = useRef(null);
+
+  useEffect(() => {
+    setFitMode(wallpaperScale === 'fit' ? 'contain' : 'cover');
+  }, [wallpaperScale]);
 
   useEffect(() => {
     const scheduleHide = () => {

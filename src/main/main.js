@@ -8,12 +8,13 @@ import { getWallpaper, setWallpaper } from 'wallpaper';
 import { spawn } from 'node:child_process';
 import ImageCache from './imageCache.js';
 import WallpaperCatalog from './wallpaperCatalog.js';
-import AppSettings, { VALID_CLOSE_BEHAVIORS, normalizeHexColor } from './appSettings.js';
+import AppSettings, { VALID_CLOSE_BEHAVIORS, VALID_WALLPAPER_SCALES, normalizeHexColor } from './appSettings.js';
 import { decodeEditedImagePayload } from './editedWallpaper.js';
 import { isAppUrl, isRequestId, parseExternalUrl } from './security.js';
 import { getAppUserAgent } from './userAgent.js';
 import { getUpdateInfo } from './updateVersion.js';
 import AppUpdater from './appUpdater.js';
+import TelemetryClient from './telemetry.js';
 import AutoLaunch from 'auto-launch';
 
 let mainWindow;
@@ -21,6 +22,7 @@ let imageCache;
 let catalog;
 let appSettings;
 let appUpdater;
+let telemetry;
 let autoLauncher;
 let autoUpdateTimer = null;
 let autoUpdateInterval = null;
@@ -44,14 +46,16 @@ const NOTICE_MD_URL = 'https://wallpaper.moely.link/notice.md';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDevelopment = !app.isPackaged;
 const entryUrl = isDevelopment ? 'http://localhost:3000/' : pathToFileURL(path.join(__dirname, '../../build/index.html')).href;
+const trayEntryUrl = pathToFileURL(path.join(__dirname, 'tray/tray.html')).href;
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'wallpaper-cache', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }
 ]);
 
 const setWallpaperCustom = async imagePath => {
+  const scale = appSettings?.getWallpaperScale() || 'fill';
   try {
-    await setWallpaper(imagePath);
+    await setWallpaper(imagePath, { scale });
     return { success: true, method: 'wallpaper-package' };
   } catch (error) {
     if (process.platform !== 'win32') throw error;
@@ -60,7 +64,7 @@ const setWallpaperCustom = async imagePath => {
       : path.join(__dirname, '../../node_modules/wallpaper/source/windows-wallpaper-x86-64.exe');
     if (!fs.existsSync(wallpaperExePath)) throw error;
     return new Promise((resolve, reject) => {
-      const child = spawn(wallpaperExePath, ['set', imagePath]);
+      const child = spawn(wallpaperExePath, ['set', imagePath, '--scale', scale]);
       let stderr = '';
       const timeout = setTimeout(() => {
         child.kill();
@@ -122,7 +126,7 @@ function sendUpdateStatus(state) {
 function trustedTraySender(event) {
   return trayWindow && !trayWindow.isDestroyed() &&
     event.sender === trayWindow.webContents && event.senderFrame === event.sender.mainFrame &&
-    isAppUrl(event.senderFrame.url, entryUrl);
+    isAppUrl(event.senderFrame.url, trayEntryUrl);
 }
 
 function getDisplayWallpapers() {
@@ -202,11 +206,25 @@ function isSameWallpaperPath(actualPath, expectedPath) {
   return normalize(actualPath) === normalize(expectedPath);
 }
 
+const externalThumbCache = new Map();
+
 async function resolveExternalThumbnail(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return '';
   try {
-    const thumb = nativeImage.createFromPath(filePath);
-    return thumb.isEmpty() ? '' : thumb.resize({ width: 360 }).toDataURL();
+    const stat = await fs.promises.stat(filePath);
+    const cacheKey = `${filePath}:${stat.mtimeMs}:${stat.size}`;
+    if (externalThumbCache.has(cacheKey)) {
+      return externalThumbCache.get(cacheKey);
+    }
+    const thumb = typeof nativeImage.createThumbnailFromPath === 'function'
+      ? await nativeImage.createThumbnailFromPath(filePath, { width: 360, height: 220 })
+      : nativeImage.createFromPath(filePath).resize({ width: 360 });
+    const dataUrl = thumb && !thumb.isEmpty() ? thumb.toDataURL() : '';
+    if (dataUrl) {
+      if (externalThumbCache.size >= 8) externalThumbCache.clear();
+      externalThumbCache.set(cacheKey, dataUrl);
+    }
+    return dataUrl;
   } catch {
     return '';
   }
@@ -284,7 +302,7 @@ function applyTrayStateToUI(state) {
   }
   tray.setToolTip(tooltipLines.join('\n'));
   if (trayWindow && !trayWindow.isDestroyed() && !trayWindow.webContents.isDestroyed() &&
-      isAppUrl(trayWindow.webContents.getURL(), entryUrl)) {
+      isAppUrl(trayWindow.webContents.getURL(), trayEntryUrl)) {
     const desiredHeight = current?.thumbnailUrl ? 276 : 172;
     if (lastTrayHeight !== desiredHeight) {
       lastTrayHeight = desiredHeight;
@@ -363,6 +381,9 @@ async function switchWallpaperFromTray(delta) {
     : (currentIdx + delta + list.length) % list.length;
   const nextWallpaper = list[nextIdx];
   const result = await applyWallpaperById(nextWallpaper.id);
+  if (result.success) {
+    telemetry?.trackEvent('wallpaper_set', { source: 'tray', scale: appSettings?.getWallpaperScale() || 'fill' });
+  }
   if (result.success && mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed() &&
       isAppUrl(mainWindow.webContents.getURL(), entryUrl)) {
     mainWindow.webContents.send('tray-select-wallpaper', nextWallpaper.id);
@@ -401,29 +422,40 @@ async function ensureTrayWindow() {
       contextIsolation: true,
       webSecurity: true,
       sandbox: true,
-      webviewTag: false
+      webviewTag: false,
+      backgroundThrottling: false
     }
   });
   trayWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   for (const eventName of ['will-navigate', 'will-redirect']) {
     trayWindow.webContents.on(eventName, event => {
-      if (!isAppUrl(event.url, entryUrl)) event.preventDefault();
+      if (!isAppUrl(event.url, trayEntryUrl)) event.preventDefault();
     });
   }
   trayWindow.webContents.on('will-attach-webview', event => event.preventDefault());
   trayWindow.on('blur', () => {
     lastTrayBlurAt = Date.now();
-    if (trayWindow && !trayWindow.isDestroyed()) trayWindow.hide();
+    if (trayWindow && !trayWindow.isDestroyed()) {
+      trayWindow.destroy();
+    }
   });
   trayWindow.on('closed', () => {
     trayWindow = null;
     trayWindowReady = null;
     lastTrayHeight = 172;
+    lastTrayStateSignature = '';
+    if (!shuttingDown && initialized && tray && !tray.isDestroyed()) {
+      setTimeout(() => {
+        if (!shuttingDown && !trayWindow && initialized && tray && !tray.isDestroyed()) {
+          ensureTrayWindow().catch(() => {});
+        }
+      }, 60);
+    }
   });
   trayWindowReady = new Promise(resolve => {
     trayWindow.once('ready-to-show', resolve);
   });
-  trayWindow.loadURL(`${entryUrl}#tray`);
+  trayWindow.loadURL(trayEntryUrl);
   await trayWindowReady;
   return trayWindow;
 }
@@ -449,11 +481,13 @@ async function toggleTrayMenu() {
     if (signature !== lastTrayStateSignature) {
       lastTrayStateSignature = signature;
       popup.webContents.send('tray-state-updated', state);
-      await new Promise(resolve => setTimeout(resolve, 16));
     }
-    if (shuttingDown || popup.isDestroyed()) return;
     popup.show();
-    refreshTrayState({ verifyExternal: true }).catch(console.error);
+    setTimeout(() => {
+      if (!shuttingDown) {
+        refreshTrayState({ verifyExternal: true }).catch(console.error);
+      }
+    }, 80);
   } finally {
     trayMenuOpening = false;
   }
@@ -562,6 +596,20 @@ if (!hasInstanceLock) {
       }
     });
     autoLauncher = new AutoLaunch({ name: '萌哩壁纸', path: process.execPath, isHidden: true });
+    const isPackagedExecutable = app.isPackaged && !/electron(\.exe)?$/i.test(path.basename(process.execPath));
+    telemetry = new TelemetryClient({
+      appKey: 'A-US-8264310255',
+      appVersion: app.getVersion(),
+      locale: app.getLocale() || 'zh-CN',
+      isDebug: !app.isPackaged,
+      enabled: isPackagedExecutable
+    });
+    if (!appSettings.hasAutoStartPreference()) {
+      if (isPackagedExecutable) {
+        await autoLauncher.enable().catch(error => console.error('Failed to enable auto-launch on first run:', error));
+      }
+      await appSettings.setAutoStart(true);
+    }
     appUpdater = new AppUpdater({
       updatesDir: path.join(app.getPath('userData'), 'updates'),
       currentVersion: app.getVersion(),
@@ -573,7 +621,7 @@ if (!hasInstanceLock) {
           child.unref();
           app.quit();
         } else {
-          await shell.openExternal('https://wallpaper.moely.link/app/setup.exe');
+          await shell.openExternal('https://dl.moely.link/wallpaper/setup.exe');
         }
       }
     });
@@ -588,6 +636,8 @@ if (!hasInstanceLock) {
       } else {
         createWindow();
       }
+      ensureTrayWindow().catch(() => {});
+      telemetry.trackEvent('app_started', { silent: shouldStartSilently });
       if (app.isPackaged && appSettings.getAutoUpdate()) {
         autoUpdateTimer = setTimeout(() => {
           appUpdater?.checkAndDownload().catch(() => {});
@@ -628,6 +678,7 @@ app.on('before-quit', event => {
     autoUpdateInterval = null;
   }
   appUpdater?.cancel();
+  telemetry?.cancel();
   if (trayWindow && !trayWindow.isDestroyed()) {
     trayWindow.destroy();
     trayWindow = null;
@@ -706,17 +757,22 @@ handle('open-external', async (_event, value) => {
     return { success: false, error: error.message };
   }
 });
-handle('get-settings', async () => ({
-  autoStart: await autoLauncher.isEnabled(),
-  closeBehavior: appSettings.getCloseBehavior(),
-  themeColor: appSettings.getThemeColor(),
-  silentStart: appSettings.getSilentStart(),
-  autoUpdate: appSettings.getAutoUpdate()
-}));
+handle('get-settings', async () => {
+  const isPackagedExecutable = app.isPackaged && !/electron(\.exe)?$/i.test(path.basename(process.execPath));
+  return {
+    autoStart: isPackagedExecutable ? await autoLauncher.isEnabled() : appSettings.getAutoStart(),
+    closeBehavior: appSettings.getCloseBehavior(),
+    wallpaperScale: appSettings.getWallpaperScale(),
+    themeColor: appSettings.getThemeColor(),
+    silentStart: appSettings.getSilentStart(),
+    autoUpdate: appSettings.getAutoUpdate()
+  };
+});
 handle('set-auto-start', async (_event, enabled) => {
   if (typeof enabled !== 'boolean') throw new Error('Invalid auto-start value');
   if (enabled) await autoLauncher.enable();
   else await autoLauncher.disable();
+  await appSettings.setAutoStart(enabled);
   return { success: true };
 });
 handle('set-silent-start', async (_event, enabled) => {
@@ -749,6 +805,11 @@ handle('set-close-behavior', async (_event, behavior) => {
   await appSettings.setCloseBehavior(behavior);
   return { success: true, closeBehavior: behavior };
 });
+handle('set-wallpaper-scale', async (_event, scale) => {
+  if (!VALID_WALLPAPER_SCALES.has(scale)) throw new Error('Invalid wallpaper scale');
+  await appSettings.setWallpaperScale(scale);
+  return { success: true, wallpaperScale: scale };
+});
 handle('set-theme-color', async (_event, color) => {
   const normalized = normalizeHexColor(color);
   if (!normalized) throw new Error('Invalid theme color');
@@ -765,13 +826,13 @@ ipcMain.handle('tray-switch-wallpaper', async (event, delta) => {
 });
 ipcMain.on('tray-show-main', event => {
   if (trustedTraySender(event) && !shuttingDown) {
-    trayWindow?.hide();
+    if (trayWindow && !trayWindow.isDestroyed()) trayWindow.destroy();
     showMainWindow();
   }
 });
 ipcMain.on('tray-quit-app', event => {
   if (trustedTraySender(event) && !shuttingDown) {
-    trayWindow?.hide();
+    if (trayWindow && !trayWindow.isDestroyed()) trayWindow.destroy();
     app.quit();
   }
 });
@@ -824,7 +885,15 @@ handle('download-update', async () => (appUpdater
 handle('install-update', async () => {
   if (!appUpdater) return { success: false, error: '更新服务未就绪' };
   try {
-    return await appUpdater.installUpdate();
+    const state = appUpdater.getState();
+    const result = await appUpdater.installUpdate();
+    if (result?.success) {
+      telemetry?.trackEvent('update_installed', {
+        fromVersion: state.currentVersion || '',
+        toVersion: state.latestVersion || ''
+      });
+    }
+    return result;
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -832,7 +901,11 @@ handle('install-update', async () => {
 
 handle('set-wallpaper', async (_event, id) => {
   if (!['string', 'number'].includes(typeof id) || String(id).length > 128) throw new Error('Invalid wallpaper ID');
-  return applyWallpaperById(id);
+  const result = await applyWallpaperById(id);
+  if (result?.success) {
+    telemetry?.trackEvent('wallpaper_set', { source: 'main', scale: appSettings?.getWallpaperScale() || 'fill' });
+  }
+  return result;
 });
 
 handle('set-edited-wallpaper', async (_event, payload, wallpaperId) => {
@@ -864,6 +937,7 @@ handle('set-edited-wallpaper', async (_event, payload, wallpaperId) => {
         isSwitching: false
       };
       applyTrayStateToUI(trayStateCache);
+      telemetry?.trackEvent('wallpaper_set', { source: 'edited', scale: appSettings?.getWallpaperScale() || 'fill' });
       return { success: true, method: result.method };
     } catch (error) {
       return { success: false, error: error.message };

@@ -188,6 +188,18 @@ test('close behavior setting renders options and notifies parent on change', () 
   expect(props.handleCloseBehaviorChange).toHaveBeenCalledWith('exit');
 });
 
+test('wallpaper scale setting renders fill/fit options and notifies parent on change', () => {
+  const handleWallpaperScaleChange = jest.fn();
+  renderViewer({ showSettings: true, wallpaperScale: 'fill', handleWallpaperScaleChange });
+  const group = container.querySelector('[aria-label="壁纸应用方式"]');
+  const options = [...group.querySelectorAll('.wallpaper-scale-option')];
+  expect(options.map(button => button.textContent)).toEqual(['填充', '适应']);
+  expect(options[0].getAttribute('aria-checked')).toBe('true');
+  expect(options[1].getAttribute('aria-checked')).toBe('false');
+  act(() => options[1].click());
+  expect(handleWallpaperScaleChange).toHaveBeenCalledWith('fit');
+});
+
 test('silent start toggle appears only when autoStart is enabled', () => {
   renderViewer({ showSettings: true, autoStart: false, silentStart: false });
   expect(container.querySelector('input[aria-label="静默启动"]')).toBeNull();

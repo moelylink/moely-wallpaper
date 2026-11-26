@@ -16,10 +16,11 @@ function App() {
   const [error, setError] = useState(null);
   const [warning, setWarning] = useState('');
   const [showSettings, setShowSettings] = useState(false);
-  const [autoStart, setAutoStart] = useState(false);
+  const [autoStart, setAutoStart] = useState(true);
   const [silentStart, setSilentStart] = useState(false);
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [closeBehavior, setCloseBehavior] = useState('tray');
+  const [wallpaperScale, setWallpaperScale] = useState('fill');
   const [themeColor, setThemeColor] = useState(DEFAULT_THEME_COLOR);
   const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -124,6 +125,17 @@ function App() {
     }
   };
 
+  const handleWallpaperScaleChange = async scale => {
+    const previous = wallpaperScale;
+    setWallpaperScale(scale);
+    try {
+      await api.setWallpaperScale(scale);
+    } catch (error) {
+      setWallpaperScale(previous);
+      notify({ type: 'error', title: '设置壁纸应用方式失败', description: error.message, duration: 5000 });
+    }
+  };
+
   const handleThemeColorChange = async color => {
     const normalized = normalizeHexColor(color);
     if (!normalized) return;
@@ -178,10 +190,11 @@ function App() {
     applyThemeColorToDocument(DEFAULT_THEME_COLOR);
     api.getSettings().then(settings => {
       if (!active) return;
-      setAutoStart(settings.autoStart === true);
+      setAutoStart(settings.autoStart !== false);
       setSilentStart(settings.silentStart === true);
       setAutoUpdate(settings.autoUpdate !== false);
       setCloseBehavior(settings.closeBehavior === 'exit' ? 'exit' : 'tray');
+      setWallpaperScale(settings.wallpaperScale === 'fit' ? 'fit' : 'fill');
       const nextColor = applyThemeColorToDocument(settings.themeColor || DEFAULT_THEME_COLOR);
       setThemeColor(nextColor);
     }).catch(error => console.error('Failed to load settings:', error));
@@ -272,6 +285,8 @@ function App() {
           handleAutoUpdateChange={handleAutoUpdateChange}
           closeBehavior={closeBehavior}
           handleCloseBehaviorChange={handleCloseBehaviorChange}
+          wallpaperScale={wallpaperScale}
+          handleWallpaperScaleChange={handleWallpaperScaleChange}
           themeColor={themeColor}
           handleThemeColorChange={handleThemeColorChange}
           isPreviewFullscreen={isPreviewFullscreen}

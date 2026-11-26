@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: wallpaper-cache: data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'" />
+  <title>萌哩壁纸托盘菜单</title>
+  <link rel="stylesheet" href="./tray.css" />
+</head>
+<body>
+  <div class="tray-menu-shell">
+    <div class="tray-menu-panel" role="menu" aria-label="萌哩壁纸托盘菜单">
+      <div id="thumb-wrap" class="tray-menu-thumb-wrap" hidden>
+        <img id="thumb-img" class="tray-menu-thumb" alt="" />
+      </div>
+      <div class="tray-menu-header">
+        <div id="caption" class="tray-menu-caption">当前桌面壁纸</div>
+        <div id="info" class="tray-menu-info" hidden>
+          <span id="wallpaper-id" class="tray-menu-id"></span>
+          <span id="wallpaper-artist" class="tray-menu-artist" hidden></span>
+        </div>
+        <div id="empty" class="tray-menu-empty">暂未设置壁纸</div>
+      </div>
+
+      <div class="tray-menu-switch-row">
+        <button id="prev-btn" type="button" role="menuitem" class="tray-menu-switch-btn" disabled>
+          <svg class="tray-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span>上一张</span>
+        </button>
+        <button id="next-btn" type="button" role="menuitem" class="tray-menu-switch-btn" disabled>
+          <span>下一张</span>
+          <svg class="tray-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="tray-menu-divider"></div>
+
+      <div class="tray-menu-actions">
+        <button id="show-btn" type="button" role="menuitem" class="tray-menu-item">
+          <svg class="tray-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" stroke="currentColor" stroke-width="1.7" />
+            <path d="M3.5 9H20.5" stroke="currentColor" stroke-width="1.7" />
+          </svg>
+          <span>显示主窗口</span>
+        </button>
+        <button id="quit-btn" type="button" role="menuitem" class="tray-menu-item tray-menu-item--danger">
+          <svg class="tray-menu-item-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 3.5V11.5M16.8 7.2A6.8 6.8 0 1 1 7.2 7.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+          </svg>
+          <span>退出程序</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  <script src="./tray.js"></script>
+</body>
+</html>

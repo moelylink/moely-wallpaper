@@ -5,7 +5,7 @@ import axios from 'axios';
 import { getUpdateInfo } from './updateVersion.js';
 
 export const DEFAULT_VERSION_URL = 'https://wallpaper.moely.link/app/version.txt';
-export const DEFAULT_DOWNLOAD_URL = 'https://wallpaper.moely.link/app/setup.exe';
+export const DEFAULT_DOWNLOAD_URL = 'https://dl.moely.link/wallpaper/setup.exe';
 
 /**
  * 管理应用自动检查更新、安装包后台流式下载与安装启动。

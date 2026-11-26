@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 
 export const VALID_CLOSE_BEHAVIORS = new Set(['tray', 'exit']);
 export const DEFAULT_CLOSE_BEHAVIOR = 'tray';
+export const VALID_WALLPAPER_SCALES = new Set(['fill', 'fit']);
+export const DEFAULT_WALLPAPER_SCALE = 'fill';
 export const DEFAULT_THEME_COLOR = '#ff00b4';
 
 export function normalizeHexColor(value) {
@@ -31,8 +33,10 @@ class AppSettings {
     this.filePath = filePath;
     this.data = {
       closeBehavior: DEFAULT_CLOSE_BEHAVIOR,
+      wallpaperScale: DEFAULT_WALLPAPER_SCALE,
       themeColor: DEFAULT_THEME_COLOR,
       currentWallpaper: null,
+      autoStart: null,
       silentStart: false,
       autoUpdate: true
     };
@@ -48,11 +52,17 @@ class AppSettings {
         if (VALID_CLOSE_BEHAVIORS.has(raw.closeBehavior)) {
           next.closeBehavior = raw.closeBehavior;
         }
+        if (VALID_WALLPAPER_SCALES.has(raw.wallpaperScale)) {
+          next.wallpaperScale = raw.wallpaperScale;
+        }
         const validColor = normalizeHexColor(raw.themeColor);
         if (validColor) {
           next.themeColor = validColor;
         }
         next.currentWallpaper = normalizeCurrentWallpaper(raw.currentWallpaper);
+        if (typeof raw.autoStart === 'boolean') {
+          next.autoStart = raw.autoStart;
+        }
         if (typeof raw.silentStart === 'boolean') {
           next.silentStart = raw.silentStart;
         }
@@ -72,12 +82,24 @@ class AppSettings {
     return this.data.closeBehavior;
   }
 
+  getWallpaperScale() {
+    return this.data.wallpaperScale;
+  }
+
   getThemeColor() {
     return this.data.themeColor;
   }
 
   getCurrentWallpaper() {
     return this.data.currentWallpaper;
+  }
+
+  hasAutoStartPreference() {
+    return typeof this.data.autoStart === 'boolean';
+  }
+
+  getAutoStart() {
+    return this.data.autoStart ?? true;
   }
 
   getSilentStart() {
@@ -113,6 +135,13 @@ class AppSettings {
     return this._persist({ closeBehavior: behavior });
   }
 
+  async setWallpaperScale(scale) {
+    if (!VALID_WALLPAPER_SCALES.has(scale)) {
+      throw new Error('Invalid wallpaper scale');
+    }
+    return this._persist({ wallpaperScale: scale });
+  }
+
   async setThemeColor(color) {
     const normalized = normalizeHexColor(color);
     if (!normalized) {
@@ -127,6 +156,13 @@ class AppSettings {
       throw new Error('Invalid current wallpaper');
     }
     return this._persist({ currentWallpaper: normalized });
+  }
+
+  async setAutoStart(enabled) {
+    if (typeof enabled !== 'boolean') {
+      throw new Error('Invalid auto-start value');
+    }
+    return this._persist({ autoStart: enabled });
   }
 
   async setSilentStart(enabled) {

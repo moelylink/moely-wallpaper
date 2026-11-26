@@ -871,8 +871,9 @@
   transform: translateX(22px);
 }
 
-/* 关闭窗口行为分段切换器 */
-.settings-panel .close-behavior-group {
+/* 关闭窗口行为与壁纸应用方式分段切换器 */
+.settings-panel .close-behavior-group,
+.settings-panel .wallpaper-scale-group {
   display: inline-flex;
   align-items: center;
   padding: 3px;
@@ -882,7 +883,8 @@
   gap: 3px;
 }
 
-.settings-panel .close-behavior-option {
+.settings-panel .close-behavior-option,
+.settings-panel .wallpaper-scale-option {
   border: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.72);
@@ -895,12 +897,14 @@
   white-space: nowrap;
 }
 
-.settings-panel .close-behavior-option:hover:not(.active) {
+.settings-panel .close-behavior-option:hover:not(.active),
+.settings-panel .wallpaper-scale-option:hover:not(.active) {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.08);
 }
 
-.settings-panel .close-behavior-option.active {
+.settings-panel .close-behavior-option.active,
+.settings-panel .wallpaper-scale-option.active {
   background: var(--primary-color);
   color: #ffffff;
 }

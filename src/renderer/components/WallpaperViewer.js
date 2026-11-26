@@ -17,6 +17,7 @@ const WallpaperViewer = ({
   silentStart = false, handleSilentStartChange,
   autoUpdate = true, handleAutoUpdateChange,
   closeBehavior = 'tray', handleCloseBehaviorChange,
+  wallpaperScale = 'fill', handleWallpaperScaleChange,
   themeColor = DEFAULT_THEME_COLOR, handleThemeColorChange,
   isPreviewFullscreen = false, onEnterPreview, onExitPreview,
   onCacheCleared, onNotify, interactionBlocked = false
@@ -742,6 +743,32 @@ ${error.message}`, duration: 6000
                   </div>
                 </div>
               </div>
+
+              <div className="setting-item">
+                <div className="setting-label">
+                  <span className="setting-title">壁纸应用方式</span>
+                  <span className="setting-description">设置桌面壁纸时的屏幕铺满方式</span>
+                </div>
+                <div className="setting-control">
+                  <div className="wallpaper-scale-group" role="radiogroup" aria-label="壁纸应用方式">
+                    {[
+                      { value: 'fill', label: '填充' },
+                      { value: 'fit', label: '适应' }
+                    ].map(option => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={wallpaperScale === option.value}
+                        className={`wallpaper-scale-option${wallpaperScale === option.value ? ' active' : ''}`}
+                        onClick={() => handleWallpaperScaleChange?.(option.value)}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
               
               <div className="setting-item">
                 <div className="setting-label">
@@ -903,6 +930,7 @@ ${error.message}`, duration: 6000
       {previewActive && currentWallpaper && (
         <WallpaperPreviewOverlay
           wallpaper={editedPreviewUrl ? { ...currentWallpaper, imageUrl: editedPreviewUrl } : currentWallpaper}
+          wallpaperScale={wallpaperScale}
           hasMultiple={!editedPreviewUrl && displayWallpapers.length > 1}
           onPrevious={() => setCurrentIndex(prev => prev === 0 ? displayWallpapers.length - 1 : prev - 1)}
           onNext={() => setCurrentIndex(prev => (prev + 1) % displayWallpapers.length)}

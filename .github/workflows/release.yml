@@ -1,0 +1,100 @@
+name: Build and Draft Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '发布标签名（例如 v1.1.0，留空则使用当前分支/标签名）'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run main process tests
+        run: npm test
+
+      - name: Run renderer tests
+        run: npm run test:renderer
+
+      - name: Build Windows installer
+        run: npm run dist
+
+      - name: Generate release notes draft
+        shell: pwsh
+        run: |
+          $currentTag = "${{ inputs.tag }}"
+          if ([string]::IsNullOrWhiteSpace($currentTag)) {
+            $currentTag = "${{ github.ref_name }}"
+          }
+          "TAG_NAME=$currentTag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          $prevTag = $null
+          try {
+            $prevTag = (git describe --tags --abbrev=0 --match "v*" "$currentTag^" 2>$null | Select-Object -First 1)
+          } catch {}
+
+          if ($prevTag) {
+            $range = "$prevTag..HEAD"
+            $compareHeader = "### 变更记录 ($prevTag -> $currentTag)"
+          } else {
+            $range = "-n 30"
+            $compareHeader = "### 变更记录 ($currentTag)"
+          }
+
+          $commits = if ($prevTag) {
+            git log $range --no-merges --pretty=format:"- %s (%h)"
+          } else {
+            git log -n 30 --no-merges --pretty=format:"- %s (%h)"
+          }
+
+          $notes = @(
+            "## 更新亮点",
+            "",
+            "- TODO: 在此补充面向用户的更新说明后点击 Publish release",
+            "",
+            $compareHeader,
+            ""
+          )
+          if ($commits) {
+            $notes += $commits
+          } else {
+            $notes += "- 暂无新增提交记录"
+          }
+
+          $notes | Out-File -FilePath "release-notes.md" -Encoding utf8
+
+      - name: Create Draft GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: ${{ env.TAG_NAME }}
+          draft: true
+          prerelease: ${{ contains(env.TAG_NAME, '-') }}
+          body_path: release-notes.md
+          fail_on_unmatched_files: false
+          files: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest*.yml

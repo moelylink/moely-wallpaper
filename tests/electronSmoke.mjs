@@ -136,7 +136,8 @@ app.once('browser-window-created', (_event, window) => {
       assert.equal((await evaluate('window.wallpaperAPI.checkUpdate()')).success, false);
       releaseVersion = app.getVersion();
       assert.equal(await evaluate("window.open('https://example.com/') === null"), true);
-      assert.equal(BrowserWindow.getAllWindows().length, 1);
+      const getMainWindows = () => BrowserWindow.getAllWindows().filter(w => !w.webContents.getURL().endsWith('/tray.html'));
+      assert.equal(getMainWindows().length, 1);
       const initialUrl = window.webContents.getURL();
       const navigation = new Promise(resolve => window.webContents.once('will-navigate', event => {
         setImmediate(() => resolve(event.defaultPrevented));
@@ -239,10 +240,10 @@ app.once('browser-window-created', (_event, window) => {
       await waitFor(async () => (await evaluate('window.wallpaperAPI.getSettings()')).closeBehavior === 'tray');
       window.close();
       await waitFor(() => window.isDestroyed());
-      assert.equal(BrowserWindow.getAllWindows().length, 0);
+      assert.equal(getMainWindows().length, 0);
       app.emit('second-instance');
-      await waitFor(() => BrowserWindow.getAllWindows().length === 1);
-      const reopened = BrowserWindow.getAllWindows()[0];
+      await waitFor(() => getMainWindows().length === 1);
+      const reopened = getMainWindows()[0];
       await waitFor(() => !reopened.isDestroyed() && reopened.isVisible());
       assert.equal(errors.some(message => /Content Security Policy|Unable to load preload|not allowed to load local resource/i.test(message)), false, errors.join('\n'));
       console.log(JSON.stringify({ success: true, electronVersion: process.versions.electron, axiosVersion: axios.VERSION, sandbox: true, cacheProtocol: true, ipcIsolation: true, navigationBlocked: true, clearWithoutReload: true, offlineCatalog: true, opaqueLoading: true, crossDateSwitching: true, semanticUpdates: true, modalInputIsolation: true, independentToast: true, trayCloseBehavior: true, loadingScreenshot, screenshot, toastScreenshot, profile }, null, 2));

@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('wallpaperAPI', Object.freeze({
   setSilentStart: enabled => ipcRenderer.invoke('set-silent-start', enabled),
   setAutoUpdate: enabled => ipcRenderer.invoke('set-auto-update', enabled),
   setCloseBehavior: behavior => ipcRenderer.invoke('set-close-behavior', behavior),
+  setWallpaperScale: scale => ipcRenderer.invoke('set-wallpaper-scale', scale),
   setThemeColor: color => ipcRenderer.invoke('set-theme-color', color),
   syncCurrentWallpaper: id => ipcRenderer.send('sync-current-wallpaper', id),
   fetchNotice: () => ipcRenderer.invoke('fetch-notice'),

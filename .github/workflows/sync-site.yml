@@ -1,0 +1,90 @@
+name: Sync R2 Installer and Site Version on Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要同步的已发布 Release 标签（例如 v1.1.0）'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve release tag
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          TAG="${INPUT_TAG:-$EVENT_TAG}"
+          if [ -z "$TAG" ]; then
+            echo "Release tag is required" >&2
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download installer asset from Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          mkdir -p tmp-release
+          gh release download "$TAG" --pattern "*.exe" --dir tmp-release
+          EXE_FILE=$(find tmp-release -maxdepth 1 -type f -name "*.exe" | head -n 1)
+          if [ -z "$EXE_FILE" ]; then
+            echo "No .exe installer found in release $TAG" >&2
+            exit 1
+          fi
+          mv -f "$EXE_FILE" tmp-release/setup.exe
+
+      - name: Upload installer to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$R2_BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "Missing required R2 secrets (R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY)" >&2
+            exit 1
+          fi
+          ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          aws s3 cp tmp-release/setup.exe "s3://${R2_BUCKET}/wallpaper/setup.exe" \
+            --endpoint-url "$ENDPOINT" \
+            --content-type "application/vnd.microsoft.portable-executable" \
+            --cache-control "public, max-age=300" \
+            --metadata-directive REPLACE
+
+      - name: Checkout site branch
+        uses: actions/checkout@v4
+        with:
+          ref: site
+          fetch-depth: 1
+
+      - name: Update app/version.txt and clean legacy setup.exe on site branch
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          mkdir -p app
+          printf '%s\n' "$VERSION" > app/version.txt
+          git add app/version.txt
+          if [ -f app/setup.exe ]; then
+            git rm -f app/setup.exe
+          fi
+          if git diff --cached --quiet; then
+            echo "No changes to commit on site branch."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(site): update version to $VERSION"
+          git push origin site

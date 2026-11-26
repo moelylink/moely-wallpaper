@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import AppSettings, { DEFAULT_CLOSE_BEHAVIOR, DEFAULT_THEME_COLOR } from '../src/main/appSettings.js';
+import AppSettings, { DEFAULT_CLOSE_BEHAVIOR, DEFAULT_THEME_COLOR, DEFAULT_WALLPAPER_SCALE } from '../src/main/appSettings.js';
 
 describe('AppSettings', () => {
   it('defaults closeBehavior to tray when file does not exist', async () => {
@@ -94,5 +94,37 @@ describe('AppSettings', () => {
     const reloaded = new AppSettings(filePath);
     await reloaded.ready;
     assert.equal(reloaded.getAutoUpdate(), false);
+  });
+
+  it('defaults wallpaperScale to fill and persists fit while rejecting invalid values', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'moely-settings-'));
+    const filePath = path.join(dir, 'settings.json');
+    const settings = new AppSettings(filePath);
+    await settings.ready;
+    assert.equal(settings.getWallpaperScale(), DEFAULT_WALLPAPER_SCALE);
+    assert.equal(settings.getWallpaperScale(), 'fill');
+
+    await settings.setWallpaperScale('fit');
+    const reloaded = new AppSettings(filePath);
+    await reloaded.ready;
+    assert.equal(reloaded.getWallpaperScale(), 'fit');
+    await assert.rejects(() => reloaded.setWallpaperScale('stretch'), /Invalid wallpaper scale/);
+  });
+
+  it('defaults autoStart to true and persists explicit boolean preference', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'moely-settings-'));
+    const filePath = path.join(dir, 'settings.json');
+    const settings = new AppSettings(filePath);
+    await settings.ready;
+    assert.equal(settings.hasAutoStartPreference(), false);
+    assert.equal(settings.getAutoStart(), true);
+
+    await settings.setAutoStart(false);
+    await assert.rejects(() => settings.setAutoStart('yes'), /Invalid auto-start value/);
+
+    const reloaded = new AppSettings(filePath);
+    await reloaded.ready;
+    assert.equal(reloaded.hasAutoStartPreference(), true);
+    assert.equal(reloaded.getAutoStart(), false);
   });
 });
