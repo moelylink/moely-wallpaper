@@ -47,7 +47,7 @@ jobs:
           if gh release download "$TAG" --pattern "*.dmg" --dir tmp-release; then
             DMG_FILE=$(find tmp-release -maxdepth 1 -type f -name "*.dmg" | head -n 1)
             if [ -n "$DMG_FILE" ]; then
-              mv -f "$DMG_FILE" tmp-release/moely-wallpaper.dmg
+              mv -f "$DMG_FILE" tmp-release/setup.dmg
             fi
           fi
 
@@ -69,8 +69,8 @@ jobs:
             --content-type "application/vnd.microsoft.portable-executable" \
             --cache-control "public, max-age=300" \
             --metadata-directive REPLACE
-          if [ -f tmp-release/moely-wallpaper.dmg ]; then
-            aws s3 cp tmp-release/moely-wallpaper.dmg "s3://${R2_BUCKET}/wallpaper/moely-wallpaper.dmg" \
+          if [ -f tmp-release/setup.dmg ]; then
+            aws s3 cp tmp-release/setup.dmg "s3://${R2_BUCKET}/wallpaper/setup.dmg" \
               --endpoint-url "$ENDPOINT" \
               --content-type "application/x-apple-diskimage" \
               --cache-control "public, max-age=300" \

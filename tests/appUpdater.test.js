@@ -16,6 +16,7 @@ test('AppUpdater skips download when current version is up to date', async () =>
   const updater = new AppUpdater({
     updatesDir,
     currentVersion: '1.1.0',
+    platform: 'win32',
     httpClient: {
       get: async url => {
         if (url.endsWith('version.txt')) return { data: '1.1.0', headers: {} };
@@ -42,6 +43,7 @@ test('AppUpdater downloads installer atomically and emits progress/downloaded st
   const updater = new AppUpdater({
     updatesDir,
     currentVersion: '1.1.0',
+    platform: 'win32',
     onStateChange: state => states.push(state),
     launchInstaller: async filePath => { launchedPath = filePath; },
     httpClient: {
@@ -83,6 +85,7 @@ test('AppUpdater reuses already downloaded installer for the same version', asyn
   const updater = new AppUpdater({
     updatesDir,
     currentVersion: '1.1.0',
+    platform: 'win32',
     httpClient: {
       get: async url => {
         if (url.endsWith('version.txt')) return { data: '1.2.0', headers: {} };
@@ -105,6 +108,7 @@ test('AppUpdater cleans up temporary file on stream failure and rejects invalid 
   const updater = new AppUpdater({
     updatesDir,
     currentVersion: '1.1.0',
+    platform: 'win32',
     httpClient: {
       get: async url => {
         if (url.endsWith('version.txt')) return { data: '1.3.0', headers: {} };
@@ -145,7 +149,7 @@ test('AppUpdater uses macOS dmg URL and installer path when platform is darwin',
     httpClient: {
       get: async url => {
         if (url.endsWith('version.txt')) return { data: '1.2.0', headers: {} };
-        if (url.endsWith('moely-wallpaper.dmg')) {
+        if (url.endsWith('setup.dmg')) {
           return {
             data: Readable.from([payload]),
             headers: { 'content-length': String(payload.length) }
@@ -160,7 +164,7 @@ test('AppUpdater uses macOS dmg URL and installer path when platform is darwin',
   assert.equal(result.success, true);
   assert.equal(result.hasUpdate, true);
   assert.equal(path.basename(result.installerPath), 'moely-wallpaper-1.2.0.dmg');
-  assert.equal(result.updateUrl, 'https://dl.moely.link/wallpaper/moely-wallpaper.dmg');
+  assert.equal(result.updateUrl, 'https://dl.moely.link/wallpaper/setup.dmg');
 
   const installResult = await updater.installUpdate();
   assert.equal(installResult.success, true);

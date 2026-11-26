@@ -6,7 +6,7 @@ import { getUpdateInfo } from './updateVersion.js';
 
 export const DEFAULT_VERSION_URL = 'https://wallpaper.moely.link/app/version.txt';
 export const DEFAULT_DOWNLOAD_URL = 'https://dl.moely.link/wallpaper/setup.exe';
-export const DEFAULT_MAC_DOWNLOAD_URL = 'https://dl.moely.link/wallpaper/moely-wallpaper.dmg';
+export const DEFAULT_MAC_DOWNLOAD_URL = 'https://dl.moely.link/wallpaper/setup.dmg';
 
 export function getDefaultDownloadUrl(platform = process.platform) {
   return platform === 'darwin' ? DEFAULT_MAC_DOWNLOAD_URL : DEFAULT_DOWNLOAD_URL;
