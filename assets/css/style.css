@@ -1248,3 +1248,170 @@ body,a,h1,h2,h3,h4,h5,h6 {
 .lights-off .download-modal .download-modal-link {
   color: #7D88FF;
 }
+.download-dropdown {
+  position: relative;
+  display: inline-flex;
+  z-index: 20;
+}
+@media (min-width:641px) {
+  .hero-cta .download-dropdown {
+    margin-right: 20px;
+  }
+  .hero-cta .download-dropdown .download-dropdown-trigger {
+    margin-right: 0;
+  }
+}
+@media (max-width:639px) {
+  .hero-cta .download-dropdown,
+  .cta-buttons .download-dropdown {
+    width: 100%;
+  }
+  .hero-cta .download-dropdown .download-dropdown-trigger,
+  .cta-buttons .download-dropdown .download-dropdown-trigger {
+    width: 100%;
+  }
+}
+.download-dropdown .download-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.download-dropdown .download-dropdown-chevron {
+  transition: transform 0.18s ease;
+  flex-shrink: 0;
+}
+.download-dropdown.is-open .download-dropdown-chevron {
+  transform: rotate(180deg);
+}
+.download-dropdown .download-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 196px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #DCE3EC;
+  border-radius: 8px;
+  box-shadow: 0 14px 32px rgba(24, 37, 56, 0.14);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+}
+.download-dropdown.is-open .download-dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+@media (max-width:639px) {
+  .download-dropdown .download-dropdown-menu {
+    width: 100%;
+  }
+}
+.lights-off .download-dropdown .download-dropdown-menu {
+  background: #1D2B40;
+  border-color: #304057;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.36);
+}
+.download-dropdown .download-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: #182538;
+  text-decoration: none !important;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.download-dropdown .download-dropdown-item:hover {
+  background: #F4F7FA;
+  color: #535FD7;
+}
+.lights-off .download-dropdown .download-dropdown-item {
+  color: #E2E8F0;
+}
+.lights-off .download-dropdown .download-dropdown-item:hover {
+  background: #2A3B55;
+  color: #fff;
+}
+.download-dropdown .download-dropdown-icon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+.download-dropdown .download-dropdown-label {
+  flex: 1;
+  text-align: left;
+}
+.download-dropdown .download-dropdown-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  background: #E9EDF3;
+  color: #535FD7;
+}
+.lights-off .download-dropdown .download-dropdown-badge {
+  background: #304057;
+  color: #7D88FF;
+}
+.cta .cta-requirements-card {
+  position: relative;
+  max-width: 520px;
+  margin: 0 auto 32px;
+  padding: 16px 20px;
+  text-align: left;
+  background: rgba(244, 247, 250, 0.92);
+  border: 1px solid #DCE3EC;
+  border-radius: 8px;
+}
+@media (min-width:641px) {
+  .cta .cta-requirements-card {
+    margin-bottom: 40px;
+    padding: 18px 24px;
+  }
+}
+.lights-off .cta .cta-requirements-card {
+  background: rgba(29, 43, 64, 0.88);
+  border-color: #304057;
+}
+.cta .cta-requirements-item {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 16px;
+  line-height: 24px;
+}
+.cta .cta-requirements-item + .cta-requirements-item {
+  margin-top: 4px;
+}
+.cta .cta-requirements-label {
+  flex-shrink: 0;
+  min-width: 72px;
+  font-weight: 600;
+  color: #182538;
+}
+.lights-off .cta .cta-requirements-label {
+  color: #fff;
+}
+.cta .cta-requirements-value {
+  color: #475569;
+}
+.lights-off .cta .cta-requirements-value {
+  color: #B4C2D6;
+}
+@media (max-width:480px) {
+  .cta .cta-requirements-item {
+    flex-direction: column;
+    gap: 2px;
+  }
+}

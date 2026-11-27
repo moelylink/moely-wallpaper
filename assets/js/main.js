@@ -113,10 +113,47 @@
       })
   }
 
-  // Download trigger and thank-you modal
+  // Download platform dropdown and thank-you modal
+  const downloadDropdowns = doc.querySelectorAll('.download-dropdown')
+  const closeAllDownloadDropdowns = function (exceptDropdown) {
+    downloadDropdowns.forEach(function (dropdown) {
+      if (dropdown === exceptDropdown) {
+        return
+      }
+      dropdown.classList.remove('is-open')
+      const trigger = dropdown.querySelector('.js-download-trigger')
+      if (trigger) {
+        trigger.setAttribute('aria-expanded', 'false')
+      }
+    })
+  }
+
+  if (downloadDropdowns.length) {
+    downloadDropdowns.forEach(function (dropdown) {
+      const trigger = dropdown.querySelector('.js-download-trigger')
+      if (!trigger) {
+        return
+      }
+      trigger.addEventListener('click', function (e) {
+        e.stopPropagation()
+        const willOpen = !dropdown.classList.contains('is-open')
+        closeAllDownloadDropdowns(willOpen ? dropdown : null)
+        dropdown.classList.toggle('is-open', willOpen)
+        trigger.setAttribute('aria-expanded', willOpen ? 'true' : 'false')
+      })
+    })
+
+    doc.addEventListener('click', function (e) {
+      if (!e.target.closest('.download-dropdown')) {
+        closeAllDownloadDropdowns(null)
+      }
+    })
+  }
+
   const downloadModal = doc.getElementById('download-modal')
-  const downloadBtns = doc.querySelectorAll('.js-download-btn')
-  if (downloadModal && downloadBtns.length) {
+  const downloadOptions = doc.querySelectorAll('.js-download-option')
+  const downloadRetryLink = downloadModal ? downloadModal.querySelector('.js-download-retry') : null
+  if (downloadModal) {
     const closeEls = downloadModal.querySelectorAll('.js-modal-close')
     const copyBtn = downloadModal.querySelector('.js-copy-qq')
     let copyTimer = null
@@ -131,8 +168,17 @@
       downloadModal.setAttribute('aria-hidden', 'true')
     }
 
-    downloadBtns.forEach(function (btn) {
-      btn.addEventListener('click', openDownloadModal)
+    downloadOptions.forEach(function (option) {
+      option.addEventListener('click', function () {
+        if (downloadRetryLink) {
+          const href = option.getAttribute('href')
+          if (href) {
+            downloadRetryLink.setAttribute('href', href)
+          }
+        }
+        closeAllDownloadDropdowns(null)
+        openDownloadModal()
+      })
     })
 
     closeEls.forEach(function (el) {
@@ -140,8 +186,11 @@
     })
 
     doc.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && downloadModal.classList.contains('is-open')) {
-        closeDownloadModal()
+      if (e.key === 'Escape') {
+        closeAllDownloadDropdowns(null)
+        if (downloadModal.classList.contains('is-open')) {
+          closeDownloadModal()
+        }
       }
     })
 
